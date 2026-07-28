@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Triqui - Fantasía 🦄vs🧸</title>
+    
+    <!-- Librerías Externas -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+    <style>
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background-color: #f0f9ff;
+            background-image: radial-gradient(#bae6fd 2px, transparent 2px), radial-gradient(#bae6fd 2px, transparent 2px);
+            background-size: 40px 40px;
+            background-position: 0 0, 20px 20px;
+            touch-action: manipulation;
+        }
+
+        /* Botones 3D */
+        .btn-3d { box-shadow: 0 6px 0 #0f766e; transition: all 0.1s ease; }
+        .btn-3d:active { box-shadow: 0 0 0 #0f766e; transform: translateY(6px); }
+        .btn-blue-3d { box-shadow: 0 6px 0 #0369a1; transition: all 0.1s ease; }
+        .btn-blue-3d:active { box-shadow: 0 0 0 #0369a1; transform: translateY(6px); }
+        .btn-green-3d { box-shadow: 0 6px 0 #15803d; transition: all 0.1s ease; }
+        .btn-green-3d:active { box-shadow: 0 0 0 #15803d; transform: translateY(6px); }
+
+        /* Celdas del Tablero */
+        .cell {
+            box-shadow: 0 8px 0 #94a3b8;
+            transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.15s ease;
+            text-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .cell:active:not(.taken) {
+            box-shadow: 0 0 0 #94a3b8;
+            transform: translateY(8px) scale(0.95);
+        }
+        .cell.taken {
+            cursor: not-allowed;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Avatares seleccionables */
+        .avatar-btn {
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 0 #cbd5e1;
+        }
+        .avatar-btn.selected {
+            background-color: #fef08a;
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 #cbd5e1;
+            transform: translateY(4px);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .winning-cell {
+            background-color: #fef08a !important;
+            animation: bounce 0.6s infinite alternate;
+            border: 4px solid #f59e0b;
+            z-index: 10;
+        }
+
+        @keyframes bounce {
+            0% { transform: translateY(0) scale(1); }
+            100% { transform: translateY(-10px) scale(1.05); }
+        }
+
+        .status-pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .modal-overlay {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+        }
+
+        /* Milestone Animation */
+        .milestone-pop {
+            animation: superPop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes superPop {
+            0% { transform: scale(0.1) rotate(-10deg); opacity: 0; }
+            50% { transform: scale(1.1) rotate(5deg); }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between pt-10 pb-4 px-4">
+
+    <!-- Contenedor Principal del Juego -->
+    <div class="max-w-md w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border-4 border-sky-200 p-6 md:p-8 relative overflow-hidden mb-4">
+        
+        <!-- Botón de Música -->
+        <button id="btn-mute" class="absolute top-4 right-4 bg-sky-100 hover:bg-sky-200 text-2xl p-2 rounded-full shadow-md border-2 border-sky-300 transition-transform active:scale-95 z-30">
+            🔊
+        </button>
+
+        <!-- Título e Info Online -->
+        <div class="mb-4 text-center mt-6 md:mt-0">
+            <h1 class="text-4xl md:text-5xl font-bold text-sky-600 drop-shadow-md leading-tight">
+                TR<span class="text-rose-500">I</span>QU<span class="text-amber-500">I</span> <br>
+                <span class="text-2xl text-slate-600">Fantasía ✨</span>
+            </h1>
+            
+            <div id="online-info" class="hidden mt-3 inline-block bg-sky-100 border-2 border-sky-300 text-sky-800 text-sm font-bold py-1 px-3 rounded-full">
+                🌐 Sala: <span id="room-code-display" class="text-rose-500 uppercase tracking-widest text-lg ml-1">----</span>
+            </div>
+        </div>
+
+        <!-- Marcador Dinámico -->
+        <div class="flex justify-between items-center bg-slate-100 rounded-2xl p-3 md:p-4 mb-6 shadow-inner border-2 border-slate-200">
+            <!-- Info Jugador 1 -->
+            <div class="text-center w-1/3">
+                <div id="p1-board-symbol" class="text-3xl md:text-4xl mb-1 drop-shadow-sm">🦄</div>
+                <div id="p1-board-name" class="font-bold text-rose-500 text-xs md:text-sm truncate px-1">Jugador 1</div>
+                <div id="score-p1" class="text-2xl font-black text-slate-700">0</div>
+            </div>
+            <!-- Empates -->
+            <div class="text-center w-1/3">
+                <div class="text-xl md:text-2xl mb-1">🤝</div>
+                <div class="font-bold text-slate-400 text-xs md:text-sm">EMPATES</div>
+                <div id="score-ties" class="text-xl font-bold text-slate-600">0</div>
+            </div>
+            <!-- Info Jugador 2 -->
+            <div class="text-center w-1/3">
+                <div id="p2-board-symbol" class="text-3xl md:text-4xl mb-1 drop-shadow-sm">🧸</div>
+                <div id="p2-board-name" class="font-bold text-sky-500 text-xs md:text-sm truncate px-1">Jugador 2</div>
+                <div id="score-p2" class="text-2xl font-black text-slate-700">0</div>
+            </div>
+        </div>
+
+        <!-- Estado del juego -->
+        <div id="status-display" class="status-pulse bg-sky-100 border-2 border-sky-300 text-sky-800 text-lg md:text-xl font-bold text-center py-3 px-2 rounded-xl mb-6 shadow-sm">
+            Cargando magia...
+        </div>
+
+        <!-- Tablero de Juego -->
+        <div class="relative mb-8">
+            <div id="board" class="grid grid-cols-3 gap-3 md:gap-4 bg-slate-200 p-3 md:p-4 rounded-2xl border-4 border-slate-300">
+                <!-- Celdas dinámicas -->
+            </div>
+            
+            <!-- Línea de victoria SVG -->
+            <svg id="winning-line-svg" class="absolute inset-0 w-full h-full pointer-events-none z-20 hidden drop-shadow-lg">
+                <line id="winning-line" x1="0" y1="0" x2="0" y2="0" stroke="#10b981" stroke-width="16" stroke-linecap="round" />
+            </svg>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="flex flex-col gap-3">
+            <button id="restart-btn" class="btn-3d hidden w-full bg-teal-500 hover:bg-teal-400 text-white font-bold text-xl py-4 px-6 rounded-2xl border-4 border-teal-700 flex items-center justify-center gap-2 group">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 group-hover:-rotate-180 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                ¡Jugar de nuevo!
+            </button>
+            <button id="menu-btn" class="btn-blue-3d w-full bg-slate-400 hover:bg-slate-300 text-white font-bold text-lg py-3 px-6 rounded-2xl border-4 border-slate-500 flex items-center justify-center hidden">
+                Cambiar de Juego
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal: Menú Principal -->
+    <div id="menu-modal" class="fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl border-4 border-sky-300 p-8 max-w-sm w-full text-center">
+            <h2 class="text-3xl font-bold text-sky-600 mb-6">Elige cómo jugar</h2>
+            <div class="flex flex-col gap-4">
+                <button id="btn-local" class="btn-3d bg-rose-400 text-white font-bold text-xl py-4 rounded-xl border-4 border-rose-600 flex justify-center items-center gap-2">
+                    📱 Jugar Local (Juntos)
+                </button>
+                <div class="relative py-2">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-300"></div></div>
+                    <div class="relative flex justify-center"><span class="bg-white px-4 text-slate-500 font-bold text-sm">O JUEGA EN LÍNEA</span></div>
+                </div>
+                <button id="btn-create-online" class="btn-blue-3d bg-sky-400 text-white font-bold text-xl py-4 rounded-xl border-4 border-sky-600">
+                    🌐 Crear Sala
+                </button>
+                <button id="btn-show-join" class="btn-blue-3d bg-indigo-400 text-white font-bold text-xl py-4 rounded-xl border-4 border-indigo-600">
+                    🤝 Unirse a Sala
+                </button>
+            </div>
+            <p id="loading-auth" class="text-slate-500 font-bold mt-4 animate-pulse">Conectando a los servidores mágicos...</p>
+        </div>
+    </div>
+
+    <!-- Modal: Configuración de Jugadores (Avatares y Nombres) -->
+    <div id="setup-modal" class="fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl border-4 border-amber-300 p-6 max-w-md w-full text-center max-h-[95vh] overflow-y-auto">
+            <h2 class="text-2xl font-bold text-amber-600 mb-4" id="setup-title">¡Crea tu Personaje!</h2>
+            
+            <!-- Zona Jugador 1 -->
+            <div id="setup-p1-zone" class="mb-6 bg-rose-50 p-4 rounded-2xl border-2 border-rose-200">
+                <h3 class="font-bold text-rose-500 mb-2 uppercase tracking-wide">Jugador 1</h3>
+                <input type="text" id="p1-name-input" placeholder="Escribe tu nombre" value="Jugador 1" class="w-full text-center border-2 border-slate-300 rounded-xl p-2 mb-3 font-bold text-slate-600 focus:border-rose-400 focus:outline-none" maxlength="12">
+                <div class="grid grid-cols-5 gap-2" id="p1-avatars"></div>
+            </div>
+
+            <!-- Zona Jugador 2 (Solo para modo local) -->
+            <div id="setup-p2-zone" class="mb-6 bg-sky-50 p-4 rounded-2xl border-2 border-sky-200 hidden">
+                <h3 class="font-bold text-sky-500 mb-2 uppercase tracking-wide">Jugador 2</h3>
+                <input type="text" id="p2-name-input" placeholder="Nombre Oponente" value="Jugador 2" class="w-full text-center border-2 border-slate-300 rounded-xl p-2 mb-3 font-bold text-slate-600 focus:border-sky-400 focus:outline-none" maxlength="12">
+                <div class="grid grid-cols-5 gap-2" id="p2-avatars"></div>
+            </div>
+
+            <button id="btn-start-game" class="w-full btn-green-3d bg-green-500 text-white font-bold text-xl py-4 rounded-xl border-4 border-green-700">
+                ¡EMPEZAR A JUGAR!
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal: Unirse a Sala -->
+    <div id="join-modal" class="fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl border-4 border-indigo-300 p-8 max-w-sm w-full text-center">
+            <h2 class="text-2xl font-bold text-indigo-600 mb-4">Código Secreto</h2>
+            <p class="text-slate-600 mb-4">Escribe el código de 4 letras que te dio tu amigo:</p>
+            <input type="text" id="room-code-input" maxlength="4" class="w-full text-center text-4xl font-bold uppercase border-4 border-slate-200 rounded-xl p-4 mb-6 focus:border-indigo-400 focus:outline-none" placeholder="ABCD">
+            <div class="flex gap-3">
+                <button id="btn-cancel-join" class="flex-1 bg-slate-300 text-slate-700 font-bold py-3 rounded-xl border-b-4 border-slate-400 active:border-b-0 active:translate-y-1">Cancelar</button>
+                <button id="btn-confirm-join" class="flex-1 bg-indigo-500 text-white font-bold py-3 rounded-xl border-b-4 border-indigo-700 active:border-b-0 active:translate-y-1">Siguiente</button>
+            </div>
+            <p id="join-error" class="text-rose-500 font-bold mt-4 hidden">Sala no encontrada o ya está llena.</p>
+        </div>
+    </div>
+
+    <!-- Modal: Meta Alcanzada -->
+    <div id="milestone-modal" class="fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4 hidden pointer-events-none">
+        <div class="bg-gradient-to-br from-amber-300 to-rose-400 rounded-3xl shadow-2xl border-4 border-white p-8 max-w-sm w-full text-center milestone-pop">
+            <div class="text-6xl mb-4">🏆</div>
+            <h2 class="text-4xl font-black text-white drop-shadow-lg mb-2">¡Increíble!</h2>
+            <p id="milestone-text" class="text-2xl font-bold text-white drop-shadow-md">Jugador ha ganado X partidas.</p>
+        </div>
+    </div>
+
+    <!-- Pie de página con los créditos -->
+    <footer class="mt-auto text-center text-xs font-bold text-slate-400 opacity-80">
+        Desarrollado por Francisco Triana - TRIQUI Agencia S.A.S derechos reservados
+    </footer>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Configuración Firebase
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'triqui-app';
+        
+        let firebaseConfig = {
+            apiKey: "AIzaSyBl2u68FqiuWQynSmBNE3DaKSsXuTCfuMQ",
+            authDomain: "triqui-fantasia.firebaseapp.com",
+            projectId: "triqui-fantasia",
+            storageBucket: "triqui-fantasia.firebasestorage.app",
+            messagingSenderId: "587255486370",
+            appId: "1:587255486370:web:77aec5d01b5144f7f304fb",
+            measurementId: "G-J3PCSXL5TE"
+        };
+
+        // Soporte automático para la vista previa:
+        if (typeof __firebase_config !== 'undefined') {
+            try { firebaseConfig = JSON.parse(__firebase_config); } catch(e) {}
+        }
+
+        let app, db, auth, user;
+
+        try {
+            // Solo intenta conectar si se ha reemplazado el texto de ejemplo
+            if (firebaseConfig.apiKey !== "TU_API_KEY") {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+            }
+        } catch (e) {
+            console.error("Modo offline detectado.");
+        }
+
+        // --- SISTEMA DE AUDIO (Tone.js) ---
+        let audioInitialized = false;
+        let isMuted = false;
+        let musicSequence = null;
+        const synths = {};
+
+        async function initAudio() {
+            if (audioInitialized) return;
+            await Tone.start();
+            
+            // Sintetizador UI (Clics)
+            synths.ui = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "triangle" },
+                envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.1 }
+            }).toDestination();
+            synths.ui.volume.value = -10;
+            
+            // Sintetizador Jugador 1
+            synths.p1 = new Tone.MembraneSynth({
+                pitchDecay: 0.05, octaves: 4, oscillator: { type: "sine" },
+                envelope: { attack: 0.01, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: "exponential" }
+            }).toDestination();
+            synths.p1.volume.value = -5;
+
+            // Sintetizador Jugador 2
+            synths.p2 = new Tone.MembraneSynth({
+                pitchDecay: 0.1, octaves: 2, oscillator: { type: "square" },
+                envelope: { attack: 0.02, decay: 0.4, sustain: 0.01, release: 1.4 }
+            }).toDestination();
+            synths.p2.volume.value = -8;
+
+            // Música Dinámica (Melodía de Fantasía)
+            synths.music = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "sine" },
+                envelope: { attack: 0.1, decay: 0.2, sustain: 0.2, release: 1 }
+            }).toDestination();
+            synths.music.volume.value = -22;
+
+            const melody = ["C4", "E4", "G4", "A4", "G4", "E4", "C4", "D4"];
+            musicSequence = new Tone.Sequence((time, note) => {
+                synths.music.triggerAttackRelease(note, "8n", time);
+            }, melody, "4n");
+
+            Tone.Transport.bpm.value = 110;
+            Tone.Transport.start();
+            musicSequence.start(0);
+
+            audioInitialized = true;
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            Tone.Destination.mute = isMuted;
+            document.getElementById('btn-mute').textContent = isMuted ? '🔇' : '🔊';
+        }
+        document.getElementById('btn-mute').onclick = toggleMute;
+
+        function playSound(type) {
+            if (!audioInitialized || isMuted) return;
+            const now = Tone.now();
+            try {
+                if (type === 'click') synths.ui.triggerAttackRelease("C5", "32n", now);
+                else if (type === 'move1') synths.p1.triggerAttackRelease("E4", "8n", now);
+                else if (type === 'move2') synths.p2.triggerAttackRelease("G3", "8n", now);
+                else if (type === 'win') {
+                    synths.ui.triggerAttackRelease(["C4", "E4", "G4"], "8n", now);
+                    synths.ui.triggerAttackRelease(["C5", "E5", "G5"], "4n", now + 0.15);
+                    synths.ui.triggerAttackRelease(["E5", "G5", "C6"], "2n", now + 0.3);
+                }
+                else if (type === 'draw') {
+                    synths.ui.triggerAttackRelease(["C4", "Eb4", "Gb4"], "4n", now);
+                    synths.ui.triggerAttackRelease(["Bb3", "Db4", "Fb4"], "2n", now + 0.3);
+                }
+            } catch(e) { console.error("Audio error", e); }
+        }
+
+        // --- CONSTANTES Y VARIABLES DEL JUEGO ---
+        const AVATARS = [
+            { id: 'unicornio', emoji: '🦄' }, { id: 'oso', emoji: '🧸' },
+            { id: 'conejo', emoji: '🐰' }, { id: 'reno', emoji: '🦌' },
+            { id: 'gatito', emoji: '🐱' }, { id: 'papa', emoji: '👨' },
+            { id: 'mama', emoji: '👩' }, { id: 'tio', emoji: '👨‍🦱' },
+            { id: 'tia', emoji: '👩‍🦱' }, { id: 'primo', emoji: '👦' },
+            { id: 'prima', emoji: '👧' }, { id: 'circulo', emoji: '⭕' },
+            { id: 'equis', emoji: '❌' }
+        ];
+
+        const WIN_CONDITIONS = [
+            [0,1,2], [3,4,5], [6,7,8], // Filas
+            [0,3,6], [1,4,7], [2,5,8], // Columnas
+            [0,4,8], [2,4,6]           // Diagonales
+        ];
+
+        // Estado del Juego
+        let mode = 'local'; // 'local', 'online-create', 'online-join'
+        let boardState = ['', '', '', '', '', '', '', '', ''];
+        let currentPlayerId = 'p1'; // 'p1' o 'p2'
+        let gameStatus = 'waiting'; // 'waiting', 'playing', 'finished'
+        let myRole = 'p1'; // En local juegas ambos, en online eres 'p1' o 'p2'
+        let scores = { p1: 0, p2: 0, ties: 0 };
+        
+        let p1Info = { name: 'Jugador 1', symbol: '🦄' };
+        let p2Info = { name: 'Jugador 2', symbol: '🧸' };
+        
+        // Control de Turnos y Metas
+        let lastWinnerId = null;
+        let currentStarter = 'p1';
+        const MILESTONES = [5, 10, 15, 20];
+        
+        // Variables Online
+        let currentRoomId = null;
+        let unsubscribe = null;
+        let tempJoinCode = null; // Guarda el código mientras configuramos el perfil
+
+        // --- REFERENCIAS DOM ---
+        const els = {
+            board: document.getElementById('board'),
+            status: document.getElementById('status-display'),
+            restartBtn: document.getElementById('restart-btn'),
+            menuBtn: document.getElementById('menu-btn'),
+            scoreP1: document.getElementById('score-p1'),
+            scoreP2: document.getElementById('score-p2'),
+            scoreTies: document.getElementById('score-ties'),
+            p1BoardSymbol: document.getElementById('p1-board-symbol'),
+            p1BoardName: document.getElementById('p1-board-name'),
+            p2BoardSymbol: document.getElementById('p2-board-symbol'),
+            p2BoardName: document.getElementById('p2-board-name'),
+            menuModal: document.getElementById('menu-modal'),
+            setupModal: document.getElementById('setup-modal'),
+            joinModal: document.getElementById('join-modal'),
+            milestoneModal: document.getElementById('milestone-modal'),
+            milestoneText: document.getElementById('milestone-text'),
+            btnLocal: document.getElementById('btn-local'),
+            btnCreate: document.getElementById('btn-create-online'),
+            btnShowJoin: document.getElementById('btn-show-join'),
+            btnConfirmJoin: document.getElementById('btn-confirm-join'),
+            btnStartGame: document.getElementById('btn-start-game'),
+            p1NameInput: document.getElementById('p1-name-input'),
+            p2NameInput: document.getElementById('p2-name-input'),
+            p1Avatars: document.getElementById('p1-avatars'),
+            p2Avatars: document.getElementById('p2-avatars'),
+            onlineInfo: document.getElementById('online-info'),
+            roomDisplay: document.getElementById('room-code-display'),
+            svg: document.getElementById('winning-line-svg'),
+            line: document.getElementById('winning-line')
+        };
+
+        async function initAuth() {
+            if (!auth || firebaseConfig.apiKey === "TU_API_KEY") {
+                document.getElementById('loading-auth').textContent = "Modo Online inactivo (Esperando tu código Firebase).";
+                els.btnCreate.classList.add('opacity-50', 'pointer-events-none');
+                els.btnShowJoin.classList.add('opacity-50', 'pointer-events-none');
+                return;
+            }
+            try {
+                const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                if (token) await signInWithCustomToken(auth, token);
+                else await signInAnonymously(auth);
+                user = auth.currentUser;
+                document.getElementById('loading-auth').style.display = 'none';
+            } catch (err) {
+                console.error("Auth error", err);
+                document.getElementById('loading-auth').textContent = "Error de conexión a la nube.";
+            }
+        }
+
+        // --- SISTEMA DE PERSONALIZACIÓN ---
+        function renderAvatars(container, selectedEmoji, onClickCallback) {
+            container.innerHTML = '';
+            AVATARS.forEach(avatar => {
+                const btn = document.createElement('button');
+                btn.className = `avatar-btn w-12 h-12 text-2xl bg-white border-2 border-slate-300 rounded-xl flex items-center justify-center ${avatar.emoji === selectedEmoji ? 'selected' : ''}`;
+                btn.textContent = avatar.emoji;
+                btn.onclick = () => {
+                    playSound('click');
+                    // Deseleccionar los demás en este contenedor
+                    Array.from(container.children).forEach(c => c.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    onClickCallback(avatar.emoji);
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function openSetup(gameMode) {
+            initAudio(); // Inicializar audio por primera vez
+            playSound('click');
+            mode = gameMode;
+            els.menuModal.classList.add('hidden');
+            els.joinModal.classList.add('hidden');
+            els.setupModal.classList.remove('hidden');
+
+            // Renderizar selector P1
+            renderAvatars(els.p1Avatars, p1Info.symbol, (emoji) => { p1Info.symbol = emoji; });
+
+            if (mode === 'local') {
+                document.getElementById('setup-p2-zone').classList.remove('hidden');
+                renderAvatars(els.p2Avatars, p2Info.symbol, (emoji) => { p2Info.symbol = emoji; });
+            } else {
+                document.getElementById('setup-p2-zone').classList.add('hidden');
+            }
+        }
+
+        els.btnStartGame.onclick = async () => {
+            playSound('click');
+            p1Info.name = els.p1NameInput.value.trim() || 'Jugador 1';
+            
+            if (mode === 'local') {
+                p2Info.name = els.p2NameInput.value.trim() || 'Jugador 2';
+                els.setupModal.classList.add('hidden');
+                
+                // Solo reiniciar puntajes y turnos si venimos desde el menú
+                scores = { p1: 0, p2: 0, ties: 0 };
+                lastWinnerId = null;
+                currentStarter = 'p1';
+                
+                startGameLocal();
+            } else if (mode === 'online-create') {
+                els.setupModal.classList.add('hidden');
+                await createOnlineGame();
+            } else if (mode === 'online-join') {
+                p2Info.name = p1Info.name; 
+                p2Info.symbol = p1Info.symbol;
+                els.setupModal.classList.add('hidden');
+                await finalizeJoinOnlineGame(tempJoinCode);
+            }
+        };
+
+        function startGameLocal() {
+            mode = 'local';
+            boardState = ['', '', '', '', '', '', '', '', ''];
+            currentPlayerId = currentStarter;
+            gameStatus = 'playing';
+            updateScoreboardUI();
+            clearAnimations();
+            renderBoard();
+            updateGameStatusUI();
+        }
+
+        function updateScoreboardUI() {
+            els.p1BoardSymbol.textContent = p1Info.symbol;
+            els.p1BoardName.textContent = p1Info.name;
+            els.p2BoardSymbol.textContent = p2Info.symbol;
+            els.p2BoardName.textContent = p2Info.name;
+            els.scoreP1.textContent = scores.p1;
+            els.scoreP2.textContent = scores.p2;
+            els.scoreTies.textContent = scores.ties;
+        }
+
+        function renderBoard() {
+            els.board.innerHTML = '';
+            boardState.forEach((cellValue, index) => {
+                const cell = document.createElement('div');
+                cell.className = `cell bg-white rounded-xl h-20 md:h-24 flex items-center justify-center text-5xl md:text-6xl cursor-pointer select-none`;
+                
+                if (cellValue !== '') {
+                    cell.innerHTML = cellValue;
+                    cell.classList.add('taken');
+                    if (cellValue === p1Info.symbol) cell.classList.add('bg-rose-50', 'border-2', 'border-rose-200');
+                    else cell.classList.add('bg-sky-50', 'border-2', 'border-sky-200');
+                }
+                
+                cell.onclick = () => handleCellClick(index);
+                els.board.appendChild(cell);
+            });
+        }
+
+        async function handleCellClick(index) {
+            if (boardState[index] !== '' || gameStatus !== 'playing') return;
+            if (mode !== 'local' && currentPlayerId !== myRole) return;
+
+            // Determinar símbolo y jugar sonido
+            const symbolToPlace = currentPlayerId === 'p1' ? p1Info.symbol : p2Info.symbol;
+            playSound(currentPlayerId === 'p1' ? 'move1' : 'move2');
+
+            // Actualizar local temporalmente para feedback visual rápido
+            boardState[index] = symbolToPlace;
+            renderBoard();
+
+            const result = calculateWinner(boardState);
+
+            if (mode === 'local') {
+                if (result) handleGameEnd(result);
+                else {
+                    currentPlayerId = currentPlayerId === 'p1' ? 'p2' : 'p1';
+                    updateGameStatusUI();
+                }
+            } else {
+                // Modo Online: Empujar cambios a Firebase
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', currentRoomId);
+                let updates = { board: boardState };
+                
+                if (result) {
+                    updates.status = 'finished';
+                    updates.winnerId = result.winnerId; 
+                    updates.winningCells = result.cells;
+                    
+                    if (result.winnerId === 'p1') scores.p1++;
+                    else if (result.winnerId === 'p2') scores.p2++;
+                    else scores.ties++;
+                    
+                    updates.scores = scores;
+
+                    // Lógica de turnos en línea
+                    if (result.winnerId === 'p1') updates.nextStarter = 'p2';
+                    else if (result.winnerId === 'p2') updates.nextStarter = 'p1';
+                    else updates.nextStarter = lastWinnerId || currentStarter;
+                    
+                    if (result.winnerId !== 'draw') updates.lastWinnerId = result.winnerId;
+                } else {
+                    updates.turnId = currentPlayerId === 'p1' ? 'p2' : 'p1';
+                }
+                await updateDoc(roomRef, updates);
+            }
+        }
+
+        function calculateWinner(board) {
+            for (let i = 0; i < WIN_CONDITIONS.length; i++) {
+                const [a, b, c] = WIN_CONDITIONS[i];
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    const winId = board[a] === p1Info.symbol ? 'p1' : 'p2';
+                    return { winnerId: winId, cells: [a, b, c] };
+                }
+            }
+            if (!board.includes('')) return { winnerId: 'draw', cells: null };
+            return null;
+        }
+
+        function handleGameEnd(result) {
+            gameStatus = 'finished';
+            
+            if (result.winnerId === 'draw') {
+                playSound('draw');
+                if (mode === 'local') scores.ties++;
+                els.status.innerHTML = '¡Es un empate! 😲';
+                els.status.className = 'status-pulse bg-amber-100 border-2 border-amber-400 text-amber-700 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6';
+            } else {
+                playSound('win');
+                if (mode === 'local') {
+                    if (result.winnerId === 'p1') scores.p1++;
+                    else scores.p2++;
+                    lastWinnerId = result.winnerId;
+                }
+                
+                const winnerName = result.winnerId === 'p1' ? p1Info.name : p2Info.name;
+                const isMe = mode === 'local' || result.winnerId === myRole;
+
+                els.status.innerHTML = isMe ? `¡GANASTE, ${winnerName}! 🎉` : `Ganó ${winnerName} 😢`;
+                els.status.className = isMe 
+                    ? 'status-pulse bg-green-100 border-2 border-green-400 text-green-700 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6'
+                    : 'bg-rose-100 border-2 border-rose-400 text-rose-700 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6';
+                
+                animateWin(result.cells);
+                if (isMe) triggerConfetti();
+
+                // Verificar si se alcanzó una meta
+                if (MILESTONES.includes(scores[result.winnerId])) {
+                    showMilestone(winnerName, scores[result.winnerId]);
+                }
+            }
+            
+            // Preparar siguiente turno local (el perdedor inicia)
+            if (mode === 'local') {
+                if (result.winnerId === 'p1') currentStarter = 'p2';
+                else if (result.winnerId === 'p2') currentStarter = 'p1';
+                else currentStarter = lastWinnerId || currentStarter; // En empate inicia el último ganador
+            }
+
+            updateScoreboardUI();
+            els.menuBtn.classList.remove('hidden');
+            els.restartBtn.classList.remove('hidden');
+        }
+
+        function showMilestone(playerName, score) {
+            playSound('win');
+            triggerConfetti();
+            setTimeout(triggerConfetti, 500);
+            setTimeout(triggerConfetti, 1000);
+            
+            els.milestoneText.textContent = `¡${playerName} ha ganado ${score} partidas!`;
+            els.milestoneModal.classList.remove('hidden');
+            
+            setTimeout(() => { els.milestoneModal.classList.add('hidden'); }, 4000);
+        }
+
+        function updateGameStatusUI() {
+            els.menuBtn.classList.remove('hidden');
+            els.restartBtn.classList.add('hidden');
+
+            if (mode !== 'local' && gameStatus === 'waiting') {
+                els.status.innerHTML = `⏳ Esperando a tu oponente...<br><span class="text-sm">¡Dile que ponga el código ${currentRoomId}!</span>`;
+                els.status.className = 'status-pulse bg-slate-100 border-2 border-slate-300 text-slate-700 text-lg font-bold text-center py-3 px-2 rounded-xl mb-6';
+                return;
+            }
+            if (gameStatus === 'finished') return;
+
+            const isMyTurn = mode === 'local' || currentPlayerId === myRole;
+            const currentName = currentPlayerId === 'p1' ? p1Info.name : p2Info.name;
+
+            if (isMyTurn) {
+                els.status.innerHTML = mode === 'local' ? `¡Turno de ${currentName}! ✨` : `¡Es tu turno, ${currentName}! ✨`;
+                els.status.className = currentPlayerId === 'p1' 
+                    ? 'status-pulse bg-rose-100 border-2 border-rose-300 text-rose-800 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6'
+                    : 'status-pulse bg-sky-100 border-2 border-sky-300 text-sky-800 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6';
+            } else {
+                els.status.innerHTML = `Esperando a ${currentName}...`;
+                els.status.className = 'bg-slate-100 border-2 border-slate-300 text-slate-500 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6';
+            }
+        }
+
+        async function createOnlineGame() {
+            if (!user) return;
+            myRole = 'p1';
+            currentRoomId = Array.from({length:4}, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'.charAt(Math.floor(Math.random()*32))).join('');
+            
+            // Guardar sesión para posible reconexión
+            localStorage.setItem('triqui_session', JSON.stringify({ code: currentRoomId, role: myRole }));
+
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', currentRoomId);
+            await setDoc(roomRef, {
+                status: 'waiting',
+                p1_info: p1Info,
+                p2_info: null,
+                board: ['', '', '', '', '', '', '', '', ''],
+                turnId: 'p1',
+                winnerId: null,
+                winningCells: null,
+                scores: { p1: 0, p2: 0, ties: 0 },
+                lastWinnerId: null,
+                nextStarter: 'p1',
+                createdAt: Date.now()
+            });
+
+            setupOnlineUI();
+            listenToRoom();
+        }
+
+        async function verifyAndJoinRoom() {
+            playSound('click');
+            const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+            if (code.length !== 4) return;
+            
+            document.getElementById('join-error').classList.add('hidden');
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', code);
+            const snap = await getDoc(roomRef);
+            
+            if (snap.exists()) {
+                const data = snap.data();
+                const session = JSON.parse(localStorage.getItem('triqui_session') || '{}');
+                tempJoinCode = code;
+                
+                // Permitir entrar si está en espera o si estamos reconectando
+                if (data.status === 'waiting' || session.code === code) {
+                    if (session.code === code && session.role) {
+                        myRole = session.role; // Recuperamos nuestro rol
+                    } else {
+                        myRole = 'p2'; // Si no hay sesión, entramos como Jugador 2
+                    }
+                    openSetup('online-join');
+                } else {
+                    document.getElementById('join-error').textContent = "La sala ya está llena.";
+                    document.getElementById('join-error').classList.remove('hidden');
+                }
+            } else {
+                document.getElementById('join-error').textContent = "Sala no encontrada.";
+                document.getElementById('join-error').classList.remove('hidden');
+            }
+        }
+
+        async function finalizeJoinOnlineGame(code) {
+            if (!user) return;
+            currentRoomId = code;
+            
+            const updates = {};
+            if (myRole === 'p2') updates.p2_info = p2Info;
+            if (myRole === 'p1') updates.p1_info = p1Info; // Por si el anfitrión se reconecta y cambia nombre
+            
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', currentRoomId);
+            const snap = await getDoc(roomRef);
+            
+            // Si la sala estaba esperando jugador, cambia el estado a jugando
+            if (snap.exists() && snap.data().status === 'waiting') {
+                updates.status = 'playing';
+            }
+
+            // Guardar sesión para reconexión
+            localStorage.setItem('triqui_session', JSON.stringify({ code: currentRoomId, role: myRole }));
+            
+            await updateDoc(roomRef, updates);
+            
+            setupOnlineUI();
+            listenToRoom();
+        }
+
+        function listenToRoom() {
+            if (unsubscribe) unsubscribe();
+            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', currentRoomId);
+            unsubscribe = onSnapshot(roomRef, (docSnap) => {
+                if (docSnap.exists()) syncFromFirebase(docSnap.data());
+                else resetToMenu();
+            });
+        }
+
+        function syncFromFirebase(data) {
+            boardState = data.board;
+            currentPlayerId = data.turnId;
+            scores = data.scores || { p1: 0, p2: 0, ties: 0 };
+            p1Info = data.p1_info || p1Info;
+            p2Info = data.p2_info || { name: '???', symbol: '⏳' };
+            lastWinnerId = data.lastWinnerId || null;
+            currentStarter = data.nextStarter || 'p1';
+            
+            updateScoreboardUI();
+            renderBoard();
+
+            if (data.status === 'finished' && gameStatus !== 'finished') {
+                handleGameEnd({ winnerId: data.winnerId, cells: data.winningCells });
+            }
+            gameStatus = data.status;
+            
+            if (gameStatus !== 'finished') {
+                clearAnimations();
+                updateGameStatusUI();
+            }
+        }
+
+        function animateWin(winningCells) {
+            const cells = document.querySelectorAll('.cell');
+            winningCells.forEach(index => { if(cells[index]) cells[index].classList.add('winning-cell'); });
+
+            const boardEl = els.board;
+            const c1 = cells[winningCells[0]];
+            const c2 = cells[winningCells[2]];
+
+            const p1 = { x: c1.offsetLeft + c1.offsetWidth/2, y: c1.offsetTop + c1.offsetHeight/2 };
+            const p2 = { x: c2.offsetLeft + c2.offsetWidth/2, y: c2.offsetTop + c2.offsetHeight/2 };
+            
+            const dx = p2.x - p1.x; const dy = p2.y - p1.y;
+            const length = Math.sqrt(dx*dx + dy*dy);
+            const ext = c1.offsetWidth / 2.2;
+            const ux = dx/length; const uy = dy/length;
+
+            const ex1 = p1.x - ux*ext; const ey1 = p1.y - uy*ext;
+            const ex2 = p2.x + ux*ext; const ey2 = p2.y + uy*ext;
+            
+            const newLength = Math.sqrt(Math.pow(ex2-ex1, 2) + Math.pow(ey2-ey1, 2));
+
+            els.line.setAttribute('x1', `${(ex1/boardEl.offsetWidth)*100}%`);
+            els.line.setAttribute('y1', `${(ey1/boardEl.offsetHeight)*100}%`);
+            els.line.setAttribute('x2', `${(ex2/boardEl.offsetWidth)*100}%`);
+            els.line.setAttribute('y2', `${(ey2/boardEl.offsetHeight)*100}%`);
+
+            els.line.style.strokeDasharray = newLength;
+            els.line.style.strokeDashoffset = newLength;
+            els.svg.classList.remove('hidden');
+            els.line.getBoundingClientRect(); // Reflow
+            els.line.style.transition = 'stroke-dashoffset 0.4s ease-out';
+            els.line.style.strokeDashoffset = '0';
+        }
+
+        function clearAnimations() {
+            document.querySelectorAll('.cell').forEach(c => c.classList.remove('winning-cell'));
+            els.svg.classList.add('hidden');
+            els.line.style.transition = 'none';
+        }
+
+        function triggerConfetti() {
+            const duration = 2500;
+            const end = Date.now() + duration;
+            const inter = setInterval(() => {
+                if (Date.now() > end) return clearInterval(inter);
+                confetti({ startVelocity: 30, spread: 360, ticks: 60, zIndex: 100, particleCount: 15, origin: { x: Math.random(), y: Math.random() - 0.2 } });
+            }, 250);
+        }
+
+        function setupOnlineUI() {
+            els.onlineInfo.classList.remove('hidden');
+            els.roomDisplay.textContent = currentRoomId;
+        }
+
+        function resetToMenu() {
+            playSound('click');
+            if (unsubscribe) unsubscribe();
+            unsubscribe = null; currentRoomId = null; mode = 'local';
+            els.onlineInfo.classList.add('hidden');
+            els.menuModal.classList.remove('hidden');
+            scores = { p1: 0, p2: 0, ties: 0 };
+            p1Info = { name: 'Jugador 1', symbol: '🦄' };
+            p2Info = { name: 'Jugador 2', symbol: '🧸' };
+            updateScoreboardUI();
+            clearAnimations();
+        }
+
+        els.restartBtn.onclick = async () => {
+            playSound('click');
+            if (mode === 'local') {
+                startGameLocal();
+            } else if (mode.startsWith('online') && user) {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', currentRoomId);
+                await updateDoc(roomRef, {
+                    board: ['', '', '', '', '', '', '', '', ''],
+                    status: 'playing', 
+                    winnerId: null, 
+                    winningCells: null, 
+                    turnId: currentStarter // currentStarter ya tiene la lógica de quién inicia
+                });
+            }
+        };
+
+        // Eventos de Menús
+        els.btnLocal.onclick = () => openSetup('local');
+        els.btnCreate.onclick = () => openSetup('online-create');
+        els.btnShowJoin.onclick = () => {
+            initAudio(); playSound('click');
+            els.menuModal.classList.add('hidden');
+            els.joinModal.classList.remove('hidden');
+            document.getElementById('room-code-input').value = '';
+        };
+        document.getElementById('btn-cancel-join').onclick = () => {
+            playSound('click');
+            els.joinModal.classList.add('hidden');
+            els.menuModal.classList.remove('hidden');
+        };
+        els.btnConfirmJoin.onclick = verifyAndJoinRoom;
+        els.menuBtn.onclick = resetToMenu;
+
+        document.getElementById('room-code-input').addEventListener('input', e => e.target.value = e.target.value.toUpperCase());
+
+        initAuth();
+    </script>
+</body>
+</html>

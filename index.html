@@ -19,6 +19,7 @@
             background-size: 40px 40px;
             background-position: 0 0, 20px 20px;
             touch-action: manipulation;
+            overflow-x: hidden;
         }
 
         /* Botones 3D */
@@ -28,6 +29,8 @@
         .btn-blue-3d:active { box-shadow: 0 0 0 #0369a1; transform: translateY(6px); }
         .btn-green-3d { box-shadow: 0 6px 0 #15803d; transition: all 0.1s ease; }
         .btn-green-3d:active { box-shadow: 0 0 0 #15803d; transform: translateY(6px); }
+        .btn-purple-3d { box-shadow: 0 6px 0 #6b21a8; transition: all 0.1s ease; }
+        .btn-purple-3d:active { box-shadow: 0 0 0 #6b21a8; transform: translateY(6px); }
 
         /* Celdas del Tablero */
         .cell {
@@ -81,7 +84,7 @@
         }
 
         .modal-overlay {
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(8px);
         }
 
@@ -94,46 +97,89 @@
             50% { transform: scale(1.1) rotate(5deg); }
             100% { transform: scale(1) rotate(0deg); opacity: 1; }
         }
+
+        /* Animación Burbuja de Chat */
+        @keyframes chatPop {
+            0% { opacity: 0; transform: translateY(20px) scale(0.5); }
+            15% { opacity: 1; transform: translateY(0) scale(1.1); }
+            25% { transform: scale(1); }
+            85% { opacity: 1; transform: translateY(0) scale(1); }
+            100% { opacity: 0; transform: translateY(-20px) scale(0.8); }
+        }
+        .chat-bubble-anim {
+            animation: chatPop 3.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Canvas Polvo Mágico overlay */
+        #magic-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        /* Badge de Rachas */
+        .streak-badge {
+            animation: flameGlow 1s infinite alternate;
+        }
+        @keyframes flameGlow {
+            0% { transform: scale(1); filter: drop-shadow(0 0 2px #f97316); }
+            100% { transform: scale(1.15); filter: drop-shadow(0 0 8px #ef4444); }
+        }
     </style>
 </head>
-<body class="min-h-screen flex flex-col items-center justify-between pt-10 pb-4 px-4">
+<body class="min-h-screen flex flex-col items-center justify-between pt-6 pb-4 px-4">
+
+    <canvas id="magic-canvas"></canvas>
 
     <!-- Contenedor Principal del Juego -->
-    <div class="max-w-md w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border-4 border-sky-200 p-6 md:p-8 relative overflow-hidden mb-4">
+    <div class="max-w-md w-full bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border-4 border-sky-200 p-5 md:p-7 relative overflow-hidden mb-4">
         
-        <!-- Botón de Música -->
-        <button id="btn-mute" class="absolute top-4 right-4 bg-sky-100 hover:bg-sky-200 text-2xl p-2 rounded-full shadow-md border-2 border-sky-300 transition-transform active:scale-95 z-30">
+        <!-- Botón de Sonido / Mute -->
+        <button id="btn-mute" class="absolute top-4 right-4 bg-sky-100 hover:bg-sky-200 text-2xl p-2 rounded-full shadow-md border-2 border-sky-300 transition-transform active:scale-95 z-30" title="Activar/Silenciar sonido">
             🔊
         </button>
 
-        <!-- Título e Info Online -->
-        <div class="mb-4 text-center mt-6 md:mt-0">
-            <h1 class="text-4xl md:text-5xl font-bold text-sky-600 drop-shadow-md leading-tight">
-                TR<span class="text-rose-500">I</span>QU<span class="text-amber-500">I</span> <br>
-                <span class="text-2xl text-slate-600">Fantasía ✨</span>
+        <!-- Título e Info Modo -->
+        <div class="mb-3 text-center mt-2 md:mt-0">
+            <h1 class="text-3xl md:text-4xl font-bold text-sky-600 drop-shadow-md leading-tight">
+                TR<span class="text-rose-500">I</span>QU<span class="text-amber-500">I</span> 
+                <span class="text-xl text-slate-600 block sm:inline">Fantasía ✨</span>
             </h1>
             
-            <div id="online-info" class="hidden mt-3 inline-block bg-sky-100 border-2 border-sky-300 text-sky-800 text-sm font-bold py-1 px-3 rounded-full">
-                🌐 Sala: <span id="room-code-display" class="text-rose-500 uppercase tracking-widest text-lg ml-1">----</span>
+            <div id="online-info" class="hidden mt-2 inline-block bg-sky-100 border-2 border-sky-300 text-sky-800 text-xs font-bold py-1 px-3 rounded-full">
+                🌐 Sala: <span id="room-code-display" class="text-rose-500 uppercase tracking-widest text-base ml-1">----</span>
+            </div>
+            <div id="ai-info" class="hidden mt-2 inline-block bg-purple-100 border-2 border-purple-300 text-purple-800 text-xs font-bold py-1 px-3 rounded-full">
+                🤖 Modo vs Máquina Mágica
             </div>
         </div>
 
-        <!-- Marcador Dinámico -->
-        <div class="flex justify-between items-center bg-slate-100 rounded-2xl p-3 md:p-4 mb-6 shadow-inner border-2 border-slate-200">
+        <!-- Marcador Dinámico con Rachas 🔥 -->
+        <div class="flex justify-between items-center bg-slate-100 rounded-2xl p-3 mb-4 shadow-inner border-2 border-slate-200 relative">
             <!-- Info Jugador 1 -->
-            <div class="text-center w-1/3">
+            <div class="text-center w-1/3 relative">
+                <div id="p1-streak" class="hidden absolute -top-3 -left-1 bg-gradient-to-r from-amber-500 to-rose-500 text-white font-black text-xs px-2 py-0.5 rounded-full shadow-md border border-white streak-badge">
+                    🔥 x<span id="p1-streak-num">2</span>
+                </div>
                 <div id="p1-board-symbol" class="text-3xl md:text-4xl mb-1 drop-shadow-sm">🦄</div>
                 <div id="p1-board-name" class="font-bold text-rose-500 text-xs md:text-sm truncate px-1">Jugador 1</div>
                 <div id="score-p1" class="text-2xl font-black text-slate-700">0</div>
             </div>
             <!-- Empates -->
             <div class="text-center w-1/3">
-                <div class="text-xl md:text-2xl mb-1">🤝</div>
-                <div class="font-bold text-slate-400 text-xs md:text-sm">EMPATES</div>
+                <div class="text-lg md:text-xl mb-1">🤝</div>
+                <div class="font-bold text-slate-400 text-[10px] md:text-xs">EMPATES</div>
                 <div id="score-ties" class="text-xl font-bold text-slate-600">0</div>
             </div>
-            <!-- Info Jugador 2 -->
-            <div class="text-center w-1/3">
+            <!-- Info Jugador 2 / IA -->
+            <div class="text-center w-1/3 relative">
+                <div id="p2-streak" class="hidden absolute -top-3 -right-1 bg-gradient-to-r from-amber-500 to-rose-500 text-white font-black text-xs px-2 py-0.5 rounded-full shadow-md border border-white streak-badge">
+                    🔥 x<span id="p2-streak-num">2</span>
+                </div>
                 <div id="p2-board-symbol" class="text-3xl md:text-4xl mb-1 drop-shadow-sm">🧸</div>
                 <div id="p2-board-name" class="font-bold text-sky-500 text-xs md:text-sm truncate px-1">Jugador 2</div>
                 <div id="score-p2" class="text-2xl font-black text-slate-700">0</div>
@@ -141,13 +187,13 @@
         </div>
 
         <!-- Estado del juego -->
-        <div id="status-display" class="status-pulse bg-sky-100 border-2 border-sky-300 text-sky-800 text-lg md:text-xl font-bold text-center py-3 px-2 rounded-xl mb-6 shadow-sm">
-            Cargando magia...
+        <div id="status-display" class="status-pulse bg-sky-100 border-2 border-sky-300 text-sky-800 text-base md:text-lg font-bold text-center py-2.5 px-2 rounded-xl mb-4 shadow-sm">
+            ¡Selecciona un modo para comenzar!
         </div>
 
         <!-- Tablero de Juego -->
-        <div class="relative mb-8">
-            <div id="board" class="grid grid-cols-3 gap-3 md:gap-4 bg-slate-200 p-3 md:p-4 rounded-2xl border-4 border-slate-300">
+        <div class="relative mb-4">
+            <div id="board" class="grid grid-cols-3 gap-2.5 md:gap-3 bg-slate-200 p-3 rounded-2xl border-4 border-slate-300">
                 <!-- Celdas dinámicas -->
             </div>
             
@@ -155,65 +201,121 @@
             <svg id="winning-line-svg" class="absolute inset-0 w-full h-full pointer-events-none z-20 hidden drop-shadow-lg">
                 <line id="winning-line" x1="0" y1="0" x2="0" y2="0" stroke="#10b981" stroke-width="16" stroke-linecap="round" />
             </svg>
+
+            <!-- Burbuja de Chat Flotante en el Tablero -->
+            <div id="chat-bubble-container" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-40 hidden">
+                <div class="bg-gradient-to-r from-amber-200 via-rose-200 to-sky-200 border-4 border-amber-400 text-slate-800 font-extrabold text-base md:text-lg py-2 px-5 rounded-3xl shadow-2xl chat-bubble-anim whitespace-nowrap flex items-center gap-2">
+                    <span id="chat-bubble-sender" class="text-xl">🦄</span>
+                    <span id="chat-bubble-text">¡Buena jugada!</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel de Reacciones y Chat Rápido -->
+        <div id="quick-chat-panel" class="mb-4 bg-slate-50 border-2 border-slate-200 rounded-2xl p-2.5">
+            <div class="text-center font-bold text-xs text-slate-500 mb-1.5 flex items-center justify-center gap-1">
+                💬 <span>Reacciones & Chat Rápido</span>
+            </div>
+            
+            <!-- Emojis Rápidos -->
+            <div class="flex justify-around items-center mb-2 gap-1 overflow-x-auto py-1">
+                <button class="emoji-btn text-xl md:text-2xl hover:scale-125 transition-transform p-1 bg-white rounded-xl shadow-sm border border-slate-200" data-msg="👏 ¡Bravo!">👏</button>
+                <button class="emoji-btn text-xl md:text-2xl hover:scale-125 transition-transform p-1 bg-white rounded-xl shadow-sm border border-slate-200" data-msg="🔥 ¡En racha!">🔥</button>
+                <button class="emoji-btn text-xl md:text-2xl hover:scale-125 transition-transform p-1 bg-white rounded-xl shadow-sm border border-slate-200" data-msg="⚡ ¡Qué jugada!">⚡</button>
+                <button class="emoji-btn text-xl md:text-2xl hover:scale-125 transition-transform p-1 bg-white rounded-xl shadow-sm border border-slate-200" data-msg="😎 ¡Pan comido!">😎</button>
+                <button class="emoji-btn text-xl md:text-2xl hover:scale-125 transition-transform p-1 bg-white rounded-xl shadow-sm border border-slate-200" data-msg="😅 ¡Uff casi!">😅</button>
+                <button class="emoji-btn text-xl md:text-2xl hover:scale-125 transition-transform p-1 bg-white rounded-xl shadow-sm border border-slate-200" data-msg="👑 ¡Soy el Rey!">👑</button>
+            </div>
+
+            <!-- Chips de Texto Rápido -->
+            <div class="grid grid-cols-2 gap-1.5">
+                <button class="quick-msg-btn bg-white hover:bg-sky-50 text-slate-700 text-[11px] font-bold py-1 px-2 rounded-lg border border-slate-300 transition-colors truncate" data-msg="¡Buena jugada! 👏">¡Buena jugada! 👏</button>
+                <button class="quick-msg-btn bg-white hover:bg-sky-50 text-slate-700 text-[11px] font-bold py-1 px-2 rounded-lg border border-slate-300 transition-colors truncate" data-msg="¡Esa estuvo cerca! ⚡">¡Esa estuvo cerca! ⚡</button>
+                <button class="quick-msg-btn bg-white hover:bg-sky-50 text-slate-700 text-[11px] font-bold py-1 px-2 rounded-lg border border-slate-300 transition-colors truncate" data-msg="¡Te toca! 🔮">¡Te toca! 🔮</button>
+                <button class="quick-msg-btn bg-white hover:bg-sky-50 text-slate-700 text-[11px] font-bold py-1 px-2 rounded-lg border border-slate-300 transition-colors truncate" data-msg="¡La próxima te gano! 😈">¡La próxima te gano! 😈</button>
+            </div>
         </div>
 
         <!-- Botones de Acción -->
-        <div class="flex flex-col gap-3">
-            <button id="restart-btn" class="btn-3d hidden w-full bg-teal-500 hover:bg-teal-400 text-white font-bold text-xl py-4 px-6 rounded-2xl border-4 border-teal-700 flex items-center justify-center gap-2 group">
+        <div class="flex flex-col gap-2">
+            <button id="restart-btn" class="btn-3d hidden w-full bg-teal-500 hover:bg-teal-400 text-white font-bold text-lg py-3 px-6 rounded-2xl border-4 border-teal-700 flex items-center justify-center gap-2 group">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 group-hover:-rotate-180 transition-transform duration-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 ¡Jugar de nuevo!
             </button>
-            <button id="menu-btn" class="btn-blue-3d w-full bg-slate-400 hover:bg-slate-300 text-white font-bold text-lg py-3 px-6 rounded-2xl border-4 border-slate-500 flex items-center justify-center hidden">
-                Cambiar de Juego
+            <button id="menu-btn" class="btn-blue-3d w-full bg-slate-400 hover:bg-slate-300 text-white font-bold text-base py-2.5 px-6 rounded-2xl border-4 border-slate-500 flex items-center justify-center">
+                Cambiar Modo / Menú
             </button>
         </div>
     </div>
 
     <!-- Modal: Menú Principal -->
     <div id="menu-modal" class="fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl shadow-2xl border-4 border-sky-300 p-8 max-w-sm w-full text-center">
-            <h2 class="text-3xl font-bold text-sky-600 mb-6">Elige cómo jugar</h2>
-            <div class="flex flex-col gap-4">
-                <button id="btn-local" class="btn-3d bg-rose-400 text-white font-bold text-xl py-4 rounded-xl border-4 border-rose-600 flex justify-center items-center gap-2">
-                    📱 Jugar Local (Juntos)
+        <div class="bg-white rounded-3xl shadow-2xl border-4 border-sky-300 p-6 max-w-sm w-full text-center max-h-[90vh] overflow-y-auto">
+            <h2 class="text-3xl font-black text-sky-600 mb-4">Elige cómo jugar</h2>
+            <div class="flex flex-col gap-3">
+                <button id="btn-singleplayer" class="btn-purple-3d bg-purple-500 hover:bg-purple-400 text-white font-bold text-lg py-3.5 rounded-xl border-4 border-purple-700 flex justify-center items-center gap-2">
+                    🤖 1 Jugador (vs Máquina)
                 </button>
-                <div class="relative py-2">
+                <button id="btn-local" class="btn-3d bg-rose-400 text-white font-bold text-lg py-3.5 rounded-xl border-4 border-rose-600 flex justify-center items-center gap-2">
+                    📱 Modo 2 Jugadores (Local)
+                </button>
+
+                <div class="relative py-1">
                     <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-300"></div></div>
-                    <div class="relative flex justify-center"><span class="bg-white px-4 text-slate-500 font-bold text-sm">O JUEGA EN LÍNEA</span></div>
+                    <div class="relative flex justify-center"><span class="bg-white px-3 text-slate-500 font-bold text-xs uppercase tracking-wider">Juego En Línea</span></div>
                 </div>
-                <button id="btn-create-online" class="btn-blue-3d bg-sky-400 text-white font-bold text-xl py-4 rounded-xl border-4 border-sky-600">
+
+                <button id="btn-create-online" class="btn-blue-3d bg-sky-400 text-white font-bold text-lg py-3 rounded-xl border-4 border-sky-600">
                     🌐 Crear Sala
                 </button>
-                <button id="btn-show-join" class="btn-blue-3d bg-indigo-400 text-white font-bold text-xl py-4 rounded-xl border-4 border-indigo-600">
+                <button id="btn-show-join" class="btn-blue-3d bg-indigo-400 text-white font-bold text-lg py-3 rounded-xl border-4 border-indigo-600">
                     🤝 Unirse a Sala
                 </button>
+
+                <div class="relative py-1">
+                    <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-300"></div></div>
+                    <div class="relative flex justify-center"><span class="bg-white px-3 text-slate-500 font-bold text-xs uppercase tracking-wider">Comunidad</span></div>
+                </div>
+
+                <button id="btn-leaderboard" class="btn-green-3d bg-amber-400 text-amber-900 font-bold text-lg py-3 rounded-xl border-4 border-amber-600 flex justify-center items-center gap-2">
+                    🏆 Ranking Global
+                </button>
             </div>
-            <p id="loading-auth" class="text-slate-500 font-bold mt-4 animate-pulse">Conectando a los servidores mágicos...</p>
+            <p id="loading-auth" class="text-slate-500 font-bold mt-3 text-xs animate-pulse">Conectando con la magia de la nube...</p>
         </div>
     </div>
 
-    <!-- Modal: Configuración de Jugadores (Avatares y Nombres) -->
+    <!-- Modal: Configuración de Jugadores (Avatares, Nombres y Dificultad IA) -->
     <div id="setup-modal" class="fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-3xl shadow-2xl border-4 border-amber-300 p-6 max-w-md w-full text-center max-h-[95vh] overflow-y-auto">
+        <div class="bg-white rounded-3xl shadow-2xl border-4 border-amber-300 p-6 max-w-md w-full text-center max-h-[92vh] overflow-y-auto">
             <h2 class="text-2xl font-bold text-amber-600 mb-4" id="setup-title">¡Crea tu Personaje!</h2>
             
+            <!-- Selector Dificultad IA (Solo en modo vs Máquina) -->
+            <div id="ai-difficulty-zone" class="mb-4 bg-purple-50 p-3 rounded-2xl border-2 border-purple-200 hidden">
+                <h3 class="font-bold text-purple-700 text-sm mb-2">Nivel de la Máquina Mágica:</h3>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" id="ai-diff-easy" class="ai-diff-btn bg-purple-200 text-purple-800 font-bold py-2 rounded-xl border-2 border-purple-400">😊 Normal</button>
+                    <button type="button" id="ai-diff-hard" class="ai-diff-btn bg-purple-600 text-white font-bold py-2 rounded-xl border-2 border-purple-800 border-amber-400 ring-2 ring-amber-300">🧙‍♂️ Invencible</button>
+                </div>
+            </div>
+
             <!-- Zona Jugador 1 -->
-            <div id="setup-p1-zone" class="mb-6 bg-rose-50 p-4 rounded-2xl border-2 border-rose-200">
-                <h3 class="font-bold text-rose-500 mb-2 uppercase tracking-wide">Jugador 1</h3>
+            <div id="setup-p1-zone" class="mb-4 bg-rose-50 p-4 rounded-2xl border-2 border-rose-200">
+                <h3 id="p1-setup-header" class="font-bold text-rose-500 mb-2 uppercase tracking-wide text-xs">Jugador 1</h3>
                 <input type="text" id="p1-name-input" placeholder="Escribe tu nombre" value="Jugador 1" class="w-full text-center border-2 border-slate-300 rounded-xl p-2 mb-3 font-bold text-slate-600 focus:border-rose-400 focus:outline-none" maxlength="12">
                 <div class="grid grid-cols-5 gap-2" id="p1-avatars"></div>
             </div>
 
             <!-- Zona Jugador 2 (Solo para modo local) -->
-            <div id="setup-p2-zone" class="mb-6 bg-sky-50 p-4 rounded-2xl border-2 border-sky-200 hidden">
-                <h3 class="font-bold text-sky-500 mb-2 uppercase tracking-wide">Jugador 2</h3>
+            <div id="setup-p2-zone" class="mb-4 bg-sky-50 p-4 rounded-2xl border-2 border-sky-200 hidden">
+                <h3 class="font-bold text-sky-500 mb-2 uppercase tracking-wide text-xs">Jugador 2</h3>
                 <input type="text" id="p2-name-input" placeholder="Nombre Oponente" value="Jugador 2" class="w-full text-center border-2 border-slate-300 rounded-xl p-2 mb-3 font-bold text-slate-600 focus:border-sky-400 focus:outline-none" maxlength="12">
                 <div class="grid grid-cols-5 gap-2" id="p2-avatars"></div>
             </div>
 
-            <button id="btn-start-game" class="w-full btn-green-3d bg-green-500 text-white font-bold text-xl py-4 rounded-xl border-4 border-green-700">
+            <button id="btn-start-game" class="w-full btn-green-3d bg-green-500 text-white font-bold text-xl py-3.5 rounded-xl border-4 border-green-700">
                 ¡EMPEZAR A JUGAR!
             </button>
         </div>
@@ -221,15 +323,33 @@
 
     <!-- Modal: Unirse a Sala -->
     <div id="join-modal" class="fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-3xl shadow-2xl border-4 border-indigo-300 p-8 max-w-sm w-full text-center">
-            <h2 class="text-2xl font-bold text-indigo-600 mb-4">Código Secreto</h2>
-            <p class="text-slate-600 mb-4">Escribe el código de 4 letras que te dio tu amigo:</p>
-            <input type="text" id="room-code-input" maxlength="4" class="w-full text-center text-4xl font-bold uppercase border-4 border-slate-200 rounded-xl p-4 mb-6 focus:border-indigo-400 focus:outline-none" placeholder="ABCD">
+        <div class="bg-white rounded-3xl shadow-2xl border-4 border-indigo-300 p-6 max-w-sm w-full text-center">
+            <h2 class="text-2xl font-bold text-indigo-600 mb-3">Código Secreto</h2>
+            <p class="text-slate-600 text-sm mb-4">Escribe el código de 4 letras que te dio tu amigo:</p>
+            <input type="text" id="room-code-input" maxlength="4" class="w-full text-center text-4xl font-bold uppercase border-4 border-slate-200 rounded-xl p-3 mb-5 focus:border-indigo-400 focus:outline-none tracking-widest" placeholder="ABCD">
             <div class="flex gap-3">
-                <button id="btn-cancel-join" class="flex-1 bg-slate-300 text-slate-700 font-bold py-3 rounded-xl border-b-4 border-slate-400 active:border-b-0 active:translate-y-1">Cancelar</button>
-                <button id="btn-confirm-join" class="flex-1 bg-indigo-500 text-white font-bold py-3 rounded-xl border-b-4 border-indigo-700 active:border-b-0 active:translate-y-1">Siguiente</button>
+                <button id="btn-cancel-join" class="flex-1 bg-slate-300 text-slate-700 font-bold py-3 rounded-xl border-b-4 border-slate-400">Cancelar</button>
+                <button id="btn-confirm-join" class="flex-1 bg-indigo-500 text-white font-bold py-3 rounded-xl border-b-4 border-indigo-700">Siguiente</button>
             </div>
-            <p id="join-error" class="text-rose-500 font-bold mt-4 hidden">Sala no encontrada o ya está llena.</p>
+            <p id="join-error" class="text-rose-500 font-bold mt-3 text-xs hidden">Sala no encontrada o ya está llena.</p>
+        </div>
+    </div>
+
+    <!-- Modal: Ranking Global -->
+    <div id="leaderboard-modal" class="fixed inset-0 z-50 modal-overlay flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl shadow-2xl border-4 border-amber-300 p-6 max-w-md w-full text-center max-h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-black text-amber-600 flex items-center gap-2">
+                    🏆 Ranking Global
+                </h2>
+                <button id="btn-close-leaderboard" class="bg-slate-200 text-slate-600 font-bold p-2 rounded-full hover:bg-slate-300">✕</button>
+            </div>
+            
+            <p class="text-slate-500 text-xs mb-3">Los mejores magos del Triqui en todo el mundo:</p>
+
+            <div id="leaderboard-list" class="overflow-y-auto flex-1 pr-1 flex flex-col gap-2">
+                <div class="text-slate-400 font-bold py-8 animate-pulse">Cargando campeones...</div>
+            </div>
         </div>
     </div>
 
@@ -242,15 +362,15 @@
         </div>
     </div>
 
-    <!-- Pie de página con los créditos -->
-    <footer class="mt-auto text-center text-xs font-bold text-slate-400 opacity-80">
+    <!-- Pie de página -->
+    <footer class="mt-auto text-center text-xs font-bold text-slate-400 opacity-80 pt-2">
         Desarrollado por Francisco Triana - TRIQUI Agencia S.A.S derechos reservados
     </footer>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Configuración Firebase
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'triqui-app';
@@ -265,7 +385,6 @@
             measurementId: "G-J3PCSXL5TE"
         };
 
-        // Soporte automático para la vista previa:
         if (typeof __firebase_config !== 'undefined') {
             try { firebaseConfig = JSON.parse(__firebase_config); } catch(e) {}
         }
@@ -273,7 +392,6 @@
         let app, db, auth, user;
 
         try {
-            // Solo intenta conectar si se ha reemplazado el texto de ejemplo
             if (firebaseConfig.apiKey !== "TU_API_KEY") {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -282,6 +400,83 @@
         } catch (e) {
             console.error("Modo offline detectado.");
         }
+
+        // --- SISTEMA DE POLVO MÁGICO (PARTÍCULAS CANVAS) ---
+        const magicCanvas = document.getElementById('magic-canvas');
+        const ctx = magicCanvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            magicCanvas.width = window.innerWidth;
+            magicCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class SparkParticle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 8 + 4;
+                this.speedX = (Math.random() - 0.5) * 8;
+                this.speedY = (Math.random() - 0.5) * 8 - 2;
+                this.color = ['#f59e0b', '#ec4899', '#3b82f6', '#10b981', '#a855f7', '#ffffff'][Math.floor(Math.random() * 6)];
+                this.life = 1.0;
+                this.decay = Math.random() * 0.03 + 0.02;
+                this.shape = Math.random() > 0.5 ? 'star' : 'circle';
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.speedY += 0.15; // Gravedad suave
+                this.life -= this.decay;
+            }
+
+            draw(ctx) {
+                if (this.life <= 0) return;
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+
+                if (this.shape === 'circle') {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    // Estrellita brillante
+                    ctx.translate(this.x, this.y);
+                    ctx.font = `${Math.max(10, this.size * 2)}px sans-serif`;
+                    ctx.fillText('✨', -this.size, this.size / 2);
+                }
+                ctx.restore();
+            }
+        }
+
+        function createMagicDust(x, y, count = 20) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new SparkParticle(x, y));
+            }
+        }
+
+        function renderParticles() {
+            ctx.clearRect(0, 0, magicCanvas.width, magicCanvas.height);
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw(ctx);
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+            requestAnimationFrame(renderParticles);
+        }
+        renderParticles();
+
+        // Escuchar toque/clic en toda la pantalla para chispas mágicas
+        window.addEventListener('pointerdown', (e) => {
+            createMagicDust(e.clientX, e.clientY, 8);
+        });
+
 
         // --- SISTEMA DE AUDIO (Tone.js) ---
         let audioInitialized = false;
@@ -293,28 +488,24 @@
             if (audioInitialized) return;
             await Tone.start();
             
-            // Sintetizador UI (Clics)
             synths.ui = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: "triangle" },
                 envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.1 }
             }).toDestination();
             synths.ui.volume.value = -10;
             
-            // Sintetizador Jugador 1
             synths.p1 = new Tone.MembraneSynth({
                 pitchDecay: 0.05, octaves: 4, oscillator: { type: "sine" },
                 envelope: { attack: 0.01, decay: 0.4, sustain: 0.01, release: 1.4, attackCurve: "exponential" }
             }).toDestination();
             synths.p1.volume.value = -5;
 
-            // Sintetizador Jugador 2
             synths.p2 = new Tone.MembraneSynth({
                 pitchDecay: 0.1, octaves: 2, oscillator: { type: "square" },
                 envelope: { attack: 0.02, decay: 0.4, sustain: 0.01, release: 1.4 }
             }).toDestination();
             synths.p2.volume.value = -8;
 
-            // Música Dinámica (Melodía de Fantasía)
             synths.music = new Tone.PolySynth(Tone.Synth, {
                 oscillator: { type: "sine" },
                 envelope: { attack: 0.1, decay: 0.2, sustain: 0.2, release: 1 }
@@ -345,6 +536,7 @@
             const now = Tone.now();
             try {
                 if (type === 'click') synths.ui.triggerAttackRelease("C5", "32n", now);
+                else if (type === 'pop') synths.ui.triggerAttackRelease("E5", "16n", now);
                 else if (type === 'move1') synths.p1.triggerAttackRelease("E4", "8n", now);
                 else if (type === 'move2') synths.p2.triggerAttackRelease("G3", "8n", now);
                 else if (type === 'win') {
@@ -359,13 +551,14 @@
             } catch(e) { console.error("Audio error", e); }
         }
 
+
         // --- CONSTANTES Y VARIABLES DEL JUEGO ---
         const AVATARS = [
             { id: 'unicornio', emoji: '🦄' }, { id: 'oso', emoji: '🧸' },
+            { id: 'robot', emoji: '🤖' }, { id: 'mago', emoji: '🧙‍♂️' },
             { id: 'conejo', emoji: '🐰' }, { id: 'reno', emoji: '🦌' },
             { id: 'gatito', emoji: '🐱' }, { id: 'papa', emoji: '👨' },
-            { id: 'mama', emoji: '👩' }, { id: 'tio', emoji: '👨‍🦱' },
-            { id: 'tia', emoji: '👩‍🦱' }, { id: 'primo', emoji: '👦' },
+            { id: 'mama', emoji: '👩' }, { id: 'primo', emoji: '👦' },
             { id: 'prima', emoji: '👧' }, { id: 'circulo', emoji: '⭕' },
             { id: 'equis', emoji: '❌' }
         ];
@@ -377,17 +570,21 @@
         ];
 
         // Estado del Juego
-        let mode = 'local'; // 'local', 'online-create', 'online-join'
+        let mode = 'single'; // 'single', 'local', 'online-create', 'online-join'
+        let aiDifficulty = 'hard'; // 'easy' o 'hard' (invencible minimax)
         let boardState = ['', '', '', '', '', '', '', '', ''];
         let currentPlayerId = 'p1'; // 'p1' o 'p2'
         let gameStatus = 'waiting'; // 'waiting', 'playing', 'finished'
-        let myRole = 'p1'; // En local juegas ambos, en online eres 'p1' o 'p2'
+        let myRole = 'p1'; 
         let scores = { p1: 0, p2: 0, ties: 0 };
         
+        // Win Streaks (Rachas) 🔥
+        let streakP1 = 0;
+        let streakP2 = 0;
+
         let p1Info = { name: 'Jugador 1', symbol: '🦄' };
-        let p2Info = { name: 'Jugador 2', symbol: '🧸' };
+        let p2Info = { name: 'Máquina Mágica', symbol: '🤖' };
         
-        // Control de Turnos y Metas
         let lastWinnerId = null;
         let currentStarter = 'p1';
         const MILESTONES = [5, 10, 15, 20];
@@ -395,7 +592,7 @@
         // Variables Online
         let currentRoomId = null;
         let unsubscribe = null;
-        let tempJoinCode = null; // Guarda el código mientras configuramos el perfil
+        let tempJoinCode = null;
 
         // --- REFERENCIAS DOM ---
         const els = {
@@ -410,24 +607,38 @@
             p1BoardName: document.getElementById('p1-board-name'),
             p2BoardSymbol: document.getElementById('p2-board-symbol'),
             p2BoardName: document.getElementById('p2-board-name'),
+            p1Streak: document.getElementById('p1-streak'),
+            p1StreakNum: document.getElementById('p1-streak-num'),
+            p2Streak: document.getElementById('p2-streak'),
+            p2StreakNum: document.getElementById('p2-streak-num'),
             menuModal: document.getElementById('menu-modal'),
             setupModal: document.getElementById('setup-modal'),
             joinModal: document.getElementById('join-modal'),
+            leaderboardModal: document.getElementById('leaderboard-modal'),
             milestoneModal: document.getElementById('milestone-modal'),
             milestoneText: document.getElementById('milestone-text'),
+            btnSingle: document.getElementById('btn-singleplayer'),
             btnLocal: document.getElementById('btn-local'),
             btnCreate: document.getElementById('btn-create-online'),
             btnShowJoin: document.getElementById('btn-show-join'),
             btnConfirmJoin: document.getElementById('btn-confirm-join'),
+            btnLeaderboard: document.getElementById('btn-leaderboard'),
             btnStartGame: document.getElementById('btn-start-game'),
             p1NameInput: document.getElementById('p1-name-input'),
             p2NameInput: document.getElementById('p2-name-input'),
             p1Avatars: document.getElementById('p1-avatars'),
             p2Avatars: document.getElementById('p2-avatars'),
+            aiDiffZone: document.getElementById('ai-difficulty-zone'),
+            aiDiffEasy: document.getElementById('ai-diff-easy'),
+            aiDiffHard: document.getElementById('ai-diff-hard'),
+            aiInfo: document.getElementById('ai-info'),
             onlineInfo: document.getElementById('online-info'),
             roomDisplay: document.getElementById('room-code-display'),
             svg: document.getElementById('winning-line-svg'),
-            line: document.getElementById('winning-line')
+            line: document.getElementById('winning-line'),
+            chatBubbleContainer: document.getElementById('chat-bubble-container'),
+            chatBubbleSender: document.getElementById('chat-bubble-sender'),
+            chatBubbleText: document.getElementById('chat-bubble-text')
         };
 
         async function initAuth() {
@@ -435,6 +646,7 @@
                 document.getElementById('loading-auth').textContent = "Modo Online inactivo (Esperando tu código Firebase).";
                 els.btnCreate.classList.add('opacity-50', 'pointer-events-none');
                 els.btnShowJoin.classList.add('opacity-50', 'pointer-events-none');
+                els.btnLeaderboard.classList.add('opacity-50', 'pointer-events-none');
                 return;
             }
             try {
@@ -449,16 +661,16 @@
             }
         }
 
-        // --- SISTEMA DE PERSONALIZACIÓN ---
+        // --- SISTEMA DE SELECCIÓN Y DIFICULTAD ---
         function renderAvatars(container, selectedEmoji, onClickCallback) {
             container.innerHTML = '';
             AVATARS.forEach(avatar => {
                 const btn = document.createElement('button');
-                btn.className = `avatar-btn w-12 h-12 text-2xl bg-white border-2 border-slate-300 rounded-xl flex items-center justify-center ${avatar.emoji === selectedEmoji ? 'selected' : ''}`;
+                btn.type = 'button';
+                btn.className = `avatar-btn w-11 h-11 text-2xl bg-white border-2 border-slate-300 rounded-xl flex items-center justify-center ${avatar.emoji === selectedEmoji ? 'selected' : ''}`;
                 btn.textContent = avatar.emoji;
                 btn.onclick = () => {
                     playSound('click');
-                    // Deseleccionar los demás en este contenedor
                     Array.from(container.children).forEach(c => c.classList.remove('selected'));
                     btn.classList.add('selected');
                     onClickCallback(avatar.emoji);
@@ -467,52 +679,101 @@
             });
         }
 
+        // Configurar selector de dificultad IA
+        els.aiDiffEasy.onclick = () => {
+            playSound('click');
+            aiDifficulty = 'easy';
+            els.aiDiffEasy.className = 'ai-diff-btn bg-purple-600 text-white font-bold py-2 rounded-xl border-2 border-purple-800 border-amber-400 ring-2 ring-amber-300';
+            els.aiDiffHard.className = 'ai-diff-btn bg-purple-200 text-purple-800 font-bold py-2 rounded-xl border-2 border-purple-400';
+        };
+        els.aiDiffHard.onclick = () => {
+            playSound('click');
+            aiDifficulty = 'hard';
+            els.aiDiffHard.className = 'ai-diff-btn bg-purple-600 text-white font-bold py-2 rounded-xl border-2 border-purple-800 border-amber-400 ring-2 ring-amber-300';
+            els.aiDiffEasy.className = 'ai-diff-btn bg-purple-200 text-purple-800 font-bold py-2 rounded-xl border-2 border-purple-400';
+        };
+
         function openSetup(gameMode) {
-            initAudio(); // Inicializar audio por primera vez
+            initAudio();
             playSound('click');
             mode = gameMode;
             els.menuModal.classList.add('hidden');
             els.joinModal.classList.add('hidden');
             els.setupModal.classList.remove('hidden');
 
-            // Renderizar selector P1
-            renderAvatars(els.p1Avatars, p1Info.symbol, (emoji) => { p1Info.symbol = emoji; });
-
-            if (mode === 'local') {
+            if (mode === 'single') {
+                document.getElementById('setup-title').textContent = "¡Configura tu partida vs IA!";
+                els.aiDiffZone.classList.remove('hidden');
+                document.getElementById('p1-setup-header').textContent = "Tú (Jugador 1)";
+                document.getElementById('setup-p2-zone').classList.add('hidden');
+                p2Info = { name: aiDifficulty === 'hard' ? 'Mago Invencible 🧙‍♂️' : 'Bot Mágico 🤖', symbol: aiDifficulty === 'hard' ? '🧙‍♂️' : '🤖' };
+            } else if (mode === 'local') {
+                document.getElementById('setup-title').textContent = "¡Configura los Personajes!";
+                els.aiDiffZone.classList.add('hidden');
+                document.getElementById('p1-setup-header').textContent = "Jugador 1";
                 document.getElementById('setup-p2-zone').classList.remove('hidden');
+                p2Info = { name: 'Jugador 2', symbol: '🧸' };
                 renderAvatars(els.p2Avatars, p2Info.symbol, (emoji) => { p2Info.symbol = emoji; });
             } else {
+                document.getElementById('setup-title').textContent = "¡Crea tu Personaje en Línea!";
+                els.aiDiffZone.classList.add('hidden');
+                document.getElementById('p1-setup-header').textContent = "Tú";
                 document.getElementById('setup-p2-zone').classList.add('hidden');
             }
+
+            renderAvatars(els.p1Avatars, p1Info.symbol, (emoji) => { p1Info.symbol = emoji; });
         }
 
         els.btnStartGame.onclick = async () => {
             playSound('click');
             p1Info.name = els.p1NameInput.value.trim() || 'Jugador 1';
             
-            if (mode === 'local') {
+            scores = { p1: 0, p2: 0, ties: 0 };
+            streakP1 = 0;
+            streakP2 = 0;
+            lastWinnerId = null;
+            currentStarter = 'p1';
+
+            if (mode === 'single') {
+                els.setupModal.classList.add('hidden');
+                els.aiInfo.classList.remove('hidden');
+                els.onlineInfo.classList.add('hidden');
+                startGameSinglePlayer();
+            } else if (mode === 'local') {
                 p2Info.name = els.p2NameInput.value.trim() || 'Jugador 2';
                 els.setupModal.classList.add('hidden');
-                
-                // Solo reiniciar puntajes y turnos si venimos desde el menú
-                scores = { p1: 0, p2: 0, ties: 0 };
-                lastWinnerId = null;
-                currentStarter = 'p1';
-                
+                els.aiInfo.classList.add('hidden');
+                els.onlineInfo.classList.add('hidden');
                 startGameLocal();
             } else if (mode === 'online-create') {
                 els.setupModal.classList.add('hidden');
+                els.aiInfo.classList.add('hidden');
                 await createOnlineGame();
             } else if (mode === 'online-join') {
                 p2Info.name = p1Info.name; 
                 p2Info.symbol = p1Info.symbol;
                 els.setupModal.classList.add('hidden');
+                els.aiInfo.classList.add('hidden');
                 await finalizeJoinOnlineGame(tempJoinCode);
             }
         };
 
+        // --- LÓGICA DE JUEGO (Single Player & Local) ---
+        function startGameSinglePlayer() {
+            boardState = ['', '', '', '', '', '', '', '', ''];
+            currentPlayerId = currentStarter;
+            gameStatus = 'playing';
+            updateScoreboardUI();
+            clearAnimations();
+            renderBoard();
+            updateGameStatusUI();
+
+            if (currentPlayerId === 'p2') {
+                triggerAITurn();
+            }
+        }
+
         function startGameLocal() {
-            mode = 'local';
             boardState = ['', '', '', '', '', '', '', '', ''];
             currentPlayerId = currentStarter;
             gameStatus = 'playing';
@@ -530,6 +791,21 @@
             els.scoreP1.textContent = scores.p1;
             els.scoreP2.textContent = scores.p2;
             els.scoreTies.textContent = scores.ties;
+
+            // Mostrar u Ocultar Rachas de Victorias 🔥
+            if (streakP1 >= 2) {
+                els.p1StreakNum.textContent = streakP1;
+                els.p1Streak.classList.remove('hidden');
+            } else {
+                els.p1Streak.classList.add('hidden');
+            }
+
+            if (streakP2 >= 2) {
+                els.p2StreakNum.textContent = streakP2;
+                els.p2Streak.classList.remove('hidden');
+            } else {
+                els.p2Streak.classList.add('hidden');
+            }
         }
 
         function renderBoard() {
@@ -545,33 +821,38 @@
                     else cell.classList.add('bg-sky-50', 'border-2', 'border-sky-200');
                 }
                 
-                cell.onclick = () => handleCellClick(index);
+                cell.onclick = (e) => {
+                    createMagicDust(e.clientX, e.clientY, 15);
+                    handleCellClick(index);
+                };
                 els.board.appendChild(cell);
             });
         }
 
         async function handleCellClick(index) {
             if (boardState[index] !== '' || gameStatus !== 'playing') return;
-            if (mode !== 'local' && currentPlayerId !== myRole) return;
+            if (mode === 'single' && currentPlayerId === 'p2') return; // Bloquear si es turno de la IA
+            if (mode.startsWith('online') && currentPlayerId !== myRole) return;
 
-            // Determinar símbolo y jugar sonido
             const symbolToPlace = currentPlayerId === 'p1' ? p1Info.symbol : p2Info.symbol;
             playSound(currentPlayerId === 'p1' ? 'move1' : 'move2');
 
-            // Actualizar local temporalmente para feedback visual rápido
             boardState[index] = symbolToPlace;
             renderBoard();
 
             const result = calculateWinner(boardState);
 
-            if (mode === 'local') {
+            if (mode === 'single' || mode === 'local') {
                 if (result) handleGameEnd(result);
                 else {
                     currentPlayerId = currentPlayerId === 'p1' ? 'p2' : 'p1';
                     updateGameStatusUI();
+                    if (mode === 'single' && currentPlayerId === 'p2') {
+                        triggerAITurn();
+                    }
                 }
             } else {
-                // Modo Online: Empujar cambios a Firebase
+                // Modo Online
                 const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', currentRoomId);
                 let updates = { board: boardState };
                 
@@ -580,22 +861,126 @@
                     updates.winnerId = result.winnerId; 
                     updates.winningCells = result.cells;
                     
-                    if (result.winnerId === 'p1') scores.p1++;
-                    else if (result.winnerId === 'p2') scores.p2++;
-                    else scores.ties++;
+                    if (result.winnerId === 'p1') {
+                        scores.p1++; streakP1++; streakP2 = 0;
+                    } else if (result.winnerId === 'p2') {
+                        scores.p2++; streakP2++; streakP1 = 0;
+                    } else {
+                        scores.ties++; streakP1 = 0; streakP2 = 0;
+                    }
                     
                     updates.scores = scores;
+                    updates.streakP1 = streakP1;
+                    updates.streakP2 = streakP2;
 
-                    // Lógica de turnos en línea
                     if (result.winnerId === 'p1') updates.nextStarter = 'p2';
                     else if (result.winnerId === 'p2') updates.nextStarter = 'p1';
                     else updates.nextStarter = lastWinnerId || currentStarter;
                     
                     if (result.winnerId !== 'draw') updates.lastWinnerId = result.winnerId;
+
+                    // Actualizar Ranking Global si hubo ganador
+                    if (result.winnerId !== 'draw') {
+                        const winnerName = result.winnerId === 'p1' ? p1Info.name : p2Info.name;
+                        const winnerSymbol = result.winnerId === 'p1' ? p1Info.symbol : p2Info.symbol;
+                        recordGlobalWin(winnerName, winnerSymbol);
+                    }
                 } else {
                     updates.turnId = currentPlayerId === 'p1' ? 'p2' : 'p1';
                 }
                 await updateDoc(roomRef, updates);
+            }
+        }
+
+        // --- INTELIGENCIA ARTIFICIAL MÁGICA (Minimax) ---
+        function triggerAITurn() {
+            els.status.innerHTML = `🤖 La Máquina Mágica está pensando...`;
+            els.status.className = 'status-pulse bg-purple-100 border-2 border-purple-300 text-purple-800 text-base font-bold text-center py-2.5 px-2 rounded-xl mb-4 shadow-sm';
+            
+            setTimeout(() => {
+                if (gameStatus !== 'playing') return;
+                
+                let bestMove;
+                if (aiDifficulty === 'easy' && Math.random() < 0.4) {
+                    // Elección aleatoria suave
+                    const available = boardState.map((v, i) => v === '' ? i : null).filter(v => v !== null);
+                    bestMove = available[Math.floor(Math.random() * available.length)];
+                } else {
+                    // Minimax Invencible
+                    bestMove = getBestMoveMinimax();
+                }
+
+                if (bestMove !== undefined && bestMove !== null) {
+                    // Disparar chispas centradas en la casilla elegida por la IA
+                    const cellEls = document.querySelectorAll('.cell');
+                    if (cellEls[bestMove]) {
+                        const rect = cellEls[bestMove].getBoundingClientRect();
+                        createMagicDust(rect.left + rect.width/2, rect.top + rect.height/2, 20);
+                    }
+
+                    boardState[bestMove] = p2Info.symbol;
+                    playSound('move2');
+                    renderBoard();
+
+                    const result = calculateWinner(boardState);
+                    if (result) {
+                        handleGameEnd(result);
+                    } else {
+                        currentPlayerId = 'p1';
+                        updateGameStatusUI();
+                    }
+                }
+            }, 600);
+        }
+
+        function getBestMoveMinimax() {
+            let bestScore = -Infinity;
+            let move = null;
+
+            for (let i = 0; i < 9; i++) {
+                if (boardState[i] === '') {
+                    boardState[i] = p2Info.symbol;
+                    let score = minimax(boardState, 0, false);
+                    boardState[i] = '';
+                    if (score > bestScore) {
+                        bestScore = score;
+                        move = i;
+                    }
+                }
+            }
+            return move;
+        }
+
+        function minimax(board, depth, isMaximizing) {
+            const winnerResult = calculateWinner(board);
+            if (winnerResult) {
+                if (winnerResult.winnerId === 'p2') return 10 - depth;
+                if (winnerResult.winnerId === 'p1') return depth - 10;
+                if (winnerResult.winnerId === 'draw') return 0;
+            }
+
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === '') {
+                        board[i] = p2Info.symbol;
+                        let score = minimax(board, depth + 1, false);
+                        board[i] = '';
+                        bestScore = Math.max(score, bestScore);
+                    }
+                }
+                return bestScore;
+            } else {
+                let bestScore = Infinity;
+                for (let i = 0; i < 9; i++) {
+                    if (board[i] === '') {
+                        board[i] = p1Info.symbol;
+                        let score = minimax(board, depth + 1, true);
+                        board[i] = '';
+                        bestScore = Math.min(score, bestScore);
+                    }
+                }
+                return bestScore;
             }
         }
 
@@ -611,44 +996,57 @@
             return null;
         }
 
+        // --- MANEJO DE FIN DE JUEGO ---
         function handleGameEnd(result) {
             gameStatus = 'finished';
             
             if (result.winnerId === 'draw') {
                 playSound('draw');
-                if (mode === 'local') scores.ties++;
-                els.status.innerHTML = '¡Es un empate! 😲';
-                els.status.className = 'status-pulse bg-amber-100 border-2 border-amber-400 text-amber-700 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6';
+                if (mode === 'single' || mode === 'local') {
+                    scores.ties++;
+                    streakP1 = 0;
+                    streakP2 = 0;
+                }
+                els.status.innerHTML = '¡Es un empate mágico! 😲';
+                els.status.className = 'status-pulse bg-amber-100 border-2 border-amber-400 text-amber-700 text-lg font-bold text-center py-2.5 px-4 rounded-xl mb-4';
             } else {
                 playSound('win');
-                if (mode === 'local') {
-                    if (result.winnerId === 'p1') scores.p1++;
-                    else scores.p2++;
+                if (mode === 'single' || mode === 'local') {
+                    if (result.winnerId === 'p1') {
+                        scores.p1++; streakP1++; streakP2 = 0;
+                    } else {
+                        scores.p2++; streakP2++; streakP1 = 0;
+                    }
                     lastWinnerId = result.winnerId;
+
+                    // Guardar en Ranking Global si un humano gana
+                    if (result.winnerId === 'p1') {
+                        recordGlobalWin(p1Info.name, p1Info.symbol);
+                    } else if (mode === 'local' && result.winnerId === 'p2') {
+                        recordGlobalWin(p2Info.name, p2Info.symbol);
+                    }
                 }
                 
                 const winnerName = result.winnerId === 'p1' ? p1Info.name : p2Info.name;
-                const isMe = mode === 'local' || result.winnerId === myRole;
+                const isMe = mode === 'single' ? result.winnerId === 'p1' : (mode === 'local' || result.winnerId === myRole);
 
-                els.status.innerHTML = isMe ? `¡GANASTE, ${winnerName}! 🎉` : `Ganó ${winnerName} 😢`;
+                els.status.innerHTML = isMe ? `¡GANASTE, ${winnerName}! 🎉` : `¡Ganó ${winnerName}! 🏆`;
                 els.status.className = isMe 
-                    ? 'status-pulse bg-green-100 border-2 border-green-400 text-green-700 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6'
-                    : 'bg-rose-100 border-2 border-rose-400 text-rose-700 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6';
+                    ? 'status-pulse bg-green-100 border-2 border-green-400 text-green-700 text-lg font-bold text-center py-2.5 px-4 rounded-xl mb-4'
+                    : 'bg-rose-100 border-2 border-rose-400 text-rose-700 text-lg font-bold text-center py-2.5 px-4 rounded-xl mb-4';
                 
                 animateWin(result.cells);
                 if (isMe) triggerConfetti();
 
-                // Verificar si se alcanzó una meta
                 if (MILESTONES.includes(scores[result.winnerId])) {
                     showMilestone(winnerName, scores[result.winnerId]);
                 }
             }
-            
-            // Preparar siguiente turno local (el perdedor inicia)
-            if (mode === 'local') {
+
+            if (mode === 'single' || mode === 'local') {
                 if (result.winnerId === 'p1') currentStarter = 'p2';
                 else if (result.winnerId === 'p2') currentStarter = 'p1';
-                else currentStarter = lastWinnerId || currentStarter; // En empate inicia el último ganador
+                else currentStarter = lastWinnerId || currentStarter;
             }
 
             updateScoreboardUI();
@@ -660,45 +1058,82 @@
             playSound('win');
             triggerConfetti();
             setTimeout(triggerConfetti, 500);
-            setTimeout(triggerConfetti, 1000);
             
-            els.milestoneText.textContent = `¡${playerName} ha ganado ${score} partidas!`;
+            els.milestoneText.textContent = `¡${playerName} ha acumulado ${score} victorias!`;
             els.milestoneModal.classList.remove('hidden');
             
-            setTimeout(() => { els.milestoneModal.classList.add('hidden'); }, 4000);
+            setTimeout(() => { els.milestoneModal.classList.add('hidden'); }, 3800);
         }
 
         function updateGameStatusUI() {
             els.menuBtn.classList.remove('hidden');
             els.restartBtn.classList.add('hidden');
 
-            if (mode !== 'local' && gameStatus === 'waiting') {
-                els.status.innerHTML = `⏳ Esperando a tu oponente...<br><span class="text-sm">¡Dile que ponga el código ${currentRoomId}!</span>`;
-                els.status.className = 'status-pulse bg-slate-100 border-2 border-slate-300 text-slate-700 text-lg font-bold text-center py-3 px-2 rounded-xl mb-6';
+            if (mode.startsWith('online') && gameStatus === 'waiting') {
+                els.status.innerHTML = `⏳ Esperando a tu oponente...<br><span class="text-xs">Código de sala: <b>${currentRoomId}</b></span>`;
+                els.status.className = 'status-pulse bg-slate-100 border-2 border-slate-300 text-slate-700 text-base font-bold text-center py-2.5 px-2 rounded-xl mb-4';
                 return;
             }
             if (gameStatus === 'finished') return;
 
-            const isMyTurn = mode === 'local' || currentPlayerId === myRole;
+            const isMyTurn = mode === 'single' ? currentPlayerId === 'p1' : (mode === 'local' || currentPlayerId === myRole);
             const currentName = currentPlayerId === 'p1' ? p1Info.name : p2Info.name;
 
             if (isMyTurn) {
                 els.status.innerHTML = mode === 'local' ? `¡Turno de ${currentName}! ✨` : `¡Es tu turno, ${currentName}! ✨`;
                 els.status.className = currentPlayerId === 'p1' 
-                    ? 'status-pulse bg-rose-100 border-2 border-rose-300 text-rose-800 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6'
-                    : 'status-pulse bg-sky-100 border-2 border-sky-300 text-sky-800 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6';
+                    ? 'status-pulse bg-rose-100 border-2 border-rose-300 text-rose-800 text-lg font-bold text-center py-2.5 px-4 rounded-xl mb-4'
+                    : 'status-pulse bg-sky-100 border-2 border-sky-300 text-sky-800 text-lg font-bold text-center py-2.5 px-4 rounded-xl mb-4';
             } else {
                 els.status.innerHTML = `Esperando a ${currentName}...`;
-                els.status.className = 'bg-slate-100 border-2 border-slate-300 text-slate-500 text-xl font-bold text-center py-3 px-4 rounded-xl mb-6';
+                els.status.className = 'bg-slate-100 border-2 border-slate-300 text-slate-500 text-base font-bold text-center py-2.5 px-4 rounded-xl mb-4';
             }
         }
 
+        // --- SISTEMA DE CHAT RÁPIDO & REACCIONES ---
+        function showFloatingChat(text, senderSymbol) {
+            playSound('pop');
+            els.chatBubbleSender.textContent = senderSymbol;
+            els.chatBubbleText.textContent = text;
+            
+            els.chatBubbleContainer.classList.remove('hidden');
+            // Reiniciar animación reinsertando la clase
+            const bubbleDiv = els.chatBubbleContainer.firstElementChild;
+            bubbleDiv.classList.remove('chat-bubble-anim');
+            void bubbleDiv.offsetWidth; // Reflow
+            bubbleDiv.classList.add('chat-bubble-anim');
+
+            setTimeout(() => {
+                els.chatBubbleContainer.classList.add('hidden');
+            }, 3200);
+        }
+
+        async function sendQuickChat(messageText) {
+            const senderSymbol = myRole === 'p1' ? p1Info.symbol : p2Info.symbol;
+            showFloatingChat(messageText, senderSymbol);
+
+            if (mode.startsWith('online') && currentRoomId) {
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', currentRoomId);
+                await updateDoc(roomRef, {
+                    lastChat: { text: messageText, symbol: senderSymbol, time: Date.now() }
+                });
+            }
+        }
+
+        document.querySelectorAll('.emoji-btn, .quick-msg-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const msg = e.currentTarget.getAttribute('data-msg');
+                if (msg) sendQuickChat(msg);
+            });
+        });
+
+
+        // --- ONLINE FIREBASE INTERACTION ---
         async function createOnlineGame() {
             if (!user) return;
             myRole = 'p1';
             currentRoomId = Array.from({length:4}, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'.charAt(Math.floor(Math.random()*32))).join('');
             
-            // Guardar sesión para posible reconexión
             localStorage.setItem('triqui_session', JSON.stringify({ code: currentRoomId, role: myRole }));
 
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', currentRoomId);
@@ -711,8 +1146,11 @@
                 winnerId: null,
                 winningCells: null,
                 scores: { p1: 0, p2: 0, ties: 0 },
+                streakP1: 0,
+                streakP2: 0,
                 lastWinnerId: null,
                 nextStarter: 'p1',
+                lastChat: null,
                 createdAt: Date.now()
             });
 
@@ -734,13 +1172,8 @@
                 const session = JSON.parse(localStorage.getItem('triqui_session') || '{}');
                 tempJoinCode = code;
                 
-                // Permitir entrar si está en espera o si estamos reconectando
                 if (data.status === 'waiting' || session.code === code) {
-                    if (session.code === code && session.role) {
-                        myRole = session.role; // Recuperamos nuestro rol
-                    } else {
-                        myRole = 'p2'; // Si no hay sesión, entramos como Jugador 2
-                    }
+                    myRole = (session.code === code && session.role) ? session.role : 'p2';
                     openSetup('online-join');
                 } else {
                     document.getElementById('join-error').textContent = "La sala ya está llena.";
@@ -758,19 +1191,16 @@
             
             const updates = {};
             if (myRole === 'p2') updates.p2_info = p2Info;
-            if (myRole === 'p1') updates.p1_info = p1Info; // Por si el anfitrión se reconecta y cambia nombre
+            if (myRole === 'p1') updates.p1_info = p1Info;
             
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', currentRoomId);
             const snap = await getDoc(roomRef);
             
-            // Si la sala estaba esperando jugador, cambia el estado a jugando
             if (snap.exists() && snap.data().status === 'waiting') {
                 updates.status = 'playing';
             }
 
-            // Guardar sesión para reconexión
             localStorage.setItem('triqui_session', JSON.stringify({ code: currentRoomId, role: myRole }));
-            
             await updateDoc(roomRef, updates);
             
             setupOnlineUI();
@@ -786,10 +1216,13 @@
             });
         }
 
+        let lastChatTime = 0;
         function syncFromFirebase(data) {
             boardState = data.board;
             currentPlayerId = data.turnId;
             scores = data.scores || { p1: 0, p2: 0, ties: 0 };
+            streakP1 = data.streakP1 || 0;
+            streakP2 = data.streakP2 || 0;
             p1Info = data.p1_info || p1Info;
             p2Info = data.p2_info || { name: '???', symbol: '⏳' };
             lastWinnerId = data.lastWinnerId || null;
@@ -797,6 +1230,12 @@
             
             updateScoreboardUI();
             renderBoard();
+
+            // Sincronizar chat en vivo de Firebase
+            if (data.lastChat && data.lastChat.time > lastChatTime) {
+                lastChatTime = data.lastChat.time;
+                showFloatingChat(data.lastChat.text, data.lastChat.symbol);
+            }
 
             if (data.status === 'finished' && gameStatus !== 'finished') {
                 handleGameEnd({ winnerId: data.winnerId, cells: data.winningCells });
@@ -809,6 +1248,105 @@
             }
         }
 
+        // --- RANKING GLOBAL (Firestore Leaderboard) ---
+        async function recordGlobalWin(playerName, playerSymbol) {
+            if (!db || firebaseConfig.apiKey === "TU_API_KEY") return;
+            try {
+                // Crear ID sanitizado para cada jugador
+                const docId = playerName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                if (!docId) return;
+
+                const leaderRef = doc(db, 'artifacts', appId, 'public', 'data', 'leaderboard', docId);
+                const snap = await getDoc(leaderRef);
+
+                if (snap.exists()) {
+                    const data = snap.data();
+                    await updateDoc(leaderRef, {
+                        wins: (data.wins || 0) + 1,
+                        symbol: playerSymbol,
+                        name: playerName,
+                        updatedAt: Date.now()
+                    });
+                } else {
+                    await setDoc(leaderRef, {
+                        name: playerName,
+                        symbol: playerSymbol,
+                        wins: 1,
+                        createdAt: Date.now()
+                    });
+                }
+            } catch (err) {
+                console.error("Error al guardar ranking global:", err);
+            }
+        }
+
+        async function showLeaderboard() {
+            playSound('click');
+            els.menuModal.classList.add('hidden');
+            els.leaderboardModal.classList.remove('hidden');
+
+            const container = document.getElementById('leaderboard-list');
+            container.innerHTML = `<div class="text-slate-400 font-bold py-8 animate-pulse">Cargando campeones...</div>`;
+
+            if (!db || firebaseConfig.apiKey === "TU_API_KEY") {
+                container.innerHTML = `<div class="text-rose-500 font-bold py-4">Para usar el Ranking Global activa la sincronización en línea.</div>`;
+                return;
+            }
+
+            try {
+                const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'leaderboard');
+                const querySnap = await getDocs(colRef);
+                
+                let players = [];
+                querySnap.forEach(docSnap => {
+                    players.push(docSnap.data());
+                });
+
+                // Ordenar en memoria por victorias descendentes
+                players.sort((a, b) => (b.wins || 0) - (a.wins || 0));
+
+                if (players.length === 0) {
+                    container.innerHTML = `<div class="text-slate-500 font-bold py-6">¡Sé el primero en ganar una partida para aparecer aquí! 🌟</div>`;
+                    return;
+                }
+
+                container.innerHTML = '';
+                players.slice(0, 15).forEach((p, index) => {
+                    const item = document.createElement('div');
+                    let rankBadge = `${index + 1}º`;
+                    let bgStyle = 'bg-slate-50 border-slate-200';
+                    
+                    if (index === 0) { rankBadge = '🥇 1º'; bgStyle = 'bg-amber-100 border-amber-300 ring-2 ring-amber-400'; }
+                    else if (index === 1) { rankBadge = '🥈 2º'; bgStyle = 'bg-slate-100 border-slate-300'; }
+                    else if (index === 2) { rankBadge = '🥉 3º'; bgStyle = 'bg-orange-100 border-orange-300'; }
+
+                    item.className = `flex justify-between items-center p-3 rounded-2xl border-2 ${bgStyle} shadow-sm`;
+                    item.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <span class="font-black text-sm text-slate-600 w-10">${rankBadge}</span>
+                            <span class="text-2xl">${p.symbol || '🦄'}</span>
+                            <span class="font-bold text-slate-800 text-sm truncate max-w-[120px]">${p.name || 'Anónimo'}</span>
+                        </div>
+                        <div class="font-black text-amber-600 text-base">
+                            ${p.wins || 0} <span class="text-xs text-slate-400 font-normal">victorias</span>
+                        </div>
+                    `;
+                    container.appendChild(item);
+                });
+            } catch (err) {
+                console.error("Leaderboard load error:", err);
+                container.innerHTML = `<div class="text-rose-500 font-bold py-4">Error al cargar la tabla de posiciones.</div>`;
+            }
+        }
+
+        document.getElementById('btn-close-leaderboard').onclick = () => {
+            playSound('click');
+            els.leaderboardModal.classList.add('hidden');
+            els.menuModal.classList.remove('hidden');
+        };
+
+
+        // --- UTILIDADES GRÁFICAS ---
         function animateWin(winningCells) {
             const cells = document.querySelectorAll('.cell');
             winningCells.forEach(index => { if(cells[index]) cells[index].classList.add('winning-cell'); });
@@ -866,19 +1404,23 @@
         function resetToMenu() {
             playSound('click');
             if (unsubscribe) unsubscribe();
-            unsubscribe = null; currentRoomId = null; mode = 'local';
+            unsubscribe = null; currentRoomId = null; mode = 'single';
             els.onlineInfo.classList.add('hidden');
+            els.aiInfo.classList.add('hidden');
             els.menuModal.classList.remove('hidden');
             scores = { p1: 0, p2: 0, ties: 0 };
+            streakP1 = 0; streakP2 = 0;
             p1Info = { name: 'Jugador 1', symbol: '🦄' };
-            p2Info = { name: 'Jugador 2', symbol: '🧸' };
+            p2Info = { name: 'Bot Mágico', symbol: '🤖' };
             updateScoreboardUI();
             clearAnimations();
         }
 
         els.restartBtn.onclick = async () => {
             playSound('click');
-            if (mode === 'local') {
+            if (mode === 'single') {
+                startGameSinglePlayer();
+            } else if (mode === 'local') {
                 startGameLocal();
             } else if (mode.startsWith('online') && user) {
                 const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'games', currentRoomId);
@@ -887,14 +1429,16 @@
                     status: 'playing', 
                     winnerId: null, 
                     winningCells: null, 
-                    turnId: currentStarter // currentStarter ya tiene la lógica de quién inicia
+                    turnId: currentStarter
                 });
             }
         };
 
-        // Eventos de Menús
+        els.btnSingle.onclick = () => openSetup('single');
         els.btnLocal.onclick = () => openSetup('local');
         els.btnCreate.onclick = () => openSetup('online-create');
+        els.btnLeaderboard.onclick = showLeaderboard;
+
         els.btnShowJoin.onclick = () => {
             initAudio(); playSound('click');
             els.menuModal.classList.add('hidden');
